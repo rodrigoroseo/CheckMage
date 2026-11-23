@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" shape-rendering="crispEdges">
+  <defs>
+    <linearGradient id="stone" x2="0" y2="1"><stop stop-color="#bd9a66"/><stop offset="1" stop-color="#92704c"/></linearGradient>
+    <pattern id="grain" width="16" height="16" patternUnits="userSpaceOnUse">
+      <path d="M0 2h6v1H2v2h8v1H4v2h9v1H1v2h5v1H0zm10 9h5v2h-8v1h9v2h-4" fill="#62482f" opacity=".21"/>
+      <path d="M3 0h2v1H3zm9 5h2v1h-2zM6 13h2v1H6z" fill="#f3d49a" opacity=".26"/>
+    </pattern>
+  </defs>
+  <path fill="url(#stone)" d="M0 0h64v64H0z"/>
+  <path fill="url(#grain)" d="M0 0h64v64H0z"/>
+  <path d="M2 2h60v1H2zm0 59h60v1H2zM2 3h1v58H2zm59 0h1v58h-1z" fill="#f1d39a" opacity=".38"/>
+  <path d="M28 25h8v2h-6v4h4v2h-4v4h6v2h-8v-6h-2v-4h2zm-1-4h2v2h-2zm8 20h2v2h-2z" fill="#644c38" opacity=".22"/>
+  <path d="M7 9h3v2H7zm46 2h4v2h-4zM12 48h2v3h-2zm37 5h4v2h-4z" fill="#ead09e" opacity=".28"/>
+</svg>

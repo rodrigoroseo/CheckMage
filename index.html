@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#171611" />
+    <meta
+      name="description"
+      content="Um xadrez caótico, com eventos, poderes e modos alternativos."
+    />
+    <title>Checkmage — Xadrez imprevisível</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="icon" type="image/svg+xml" href="/src/checkmage.svg" />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="Checkmage início"
+          ><img class="brand-logo" src="/src/checkmage.svg" alt="" width="30" height="30" /><span
+            >CHECK<i>MAGE</i></span
+          ></a
+        >
+        <div class="topbar-center">
+          <span class="live-dot"></span> PROTÓTIPO JOGÁVEL <span class="divider">/</span> PARTIDA
+          LOCAL
+        </div>
+        <div class="topbar-actions">
+          <button
+            id="sound-toggle"
+            class="button button-quiet sound-toggle"
+            type="button"
+            aria-pressed="true"
+            aria-label="Desativar efeitos sonoros"
+          >
+            ♫ Efeitos ligados</button
+          ><button
+            id="music-toggle"
+            class="button button-quiet sound-toggle"
+            type="button"
+            aria-pressed="true"
+            aria-label="Desativar música ambiente"
+          >
+            ♪ Música ligada</button
+          ><button id="new-game-top" class="button button-quiet" type="button">
+            <span>↻</span> Nova partida
+          </button>
+        </div>
+      </header>
+
+      <main>
+        <section id="setup-screen" class="setup-screen">
+          <div class="hero-copy">
+            <div class="eyebrow">
+              <span class="eyebrow-line"></span> A FORTUNA SORRI PARA QUEM ARRISCA
+            </div>
+            <h1>O destino<br /><span>está no tabuleiro.</span></h1>
+            <p>
+              Peças, poderes e eventos disputam cada casa.<br />Forje sua estratégia e veja o caos
+              tomar forma.
+            </p>
+          </div>
+          <div class="setup-grid">
+            <div class="setup-main">
+              <div class="section-heading">
+                <div>
+                  <span class="section-number">01</span>
+                  <h2>Monte sua partida</h2>
+                </div>
+                <span class="section-hint">ATIVE O QUE QUISER</span>
+              </div>
+              <div class="mechanic-group">
+                <div class="group-label">
+                  <span class="group-icon icon-event">✳</span>
+                  <div>
+                    <h3>Eventos de tabuleiro</h3>
+                    <button
+                      class="help-tip"
+                      type="button"
+                      aria-label="Sobre eventos de tabuleiro"
+                      title="Eventos ambientais mudam o tabuleiro a cada cinco rodadas completas. Selecione quais podem acontecer."
+                    >
+                      ?
+                    </button>
+                    <p>O mundo muda a cada 5 rodadas completas.</p>
+                  </div>
+                  <label class="switch"
+                    ><input id="toggle-events" type="checkbox" checked /><span></span
+                  ></label>
+                </div>
+                <div id="events-options" class="option-grid">
+                  <label class="option-card"
+                    ><input
+                      type="checkbox"
+                      name="event"
+                      value="quake"
+                      title="Duas casas vazias do centro viram abismos até o próximo evento."
+                      checked
+                    /><span class="option-check"></span><span class="option-symbol">▦</span
+                    ><span class="option-text"
+                      ><b>Terremoto</b><small>Casas viram abismos.</small></span
+                    ></label
+                  >
+                  <label class="option-card"
+                    ><input
+                      type="checkbox"
+                      name="event"
+                      value="portal"
+                      title="Pousar em um portal transporta a peça para o outro."
+                      checked
+                    /><span class="option-check"></span><span class="option-symbol purple">◉</span
+                    ><span class="option-text"
+                      ><b>Portal dimensional</b><small>Uma viagem inesperada.</small></span
+                    ></label
+                  >
+                  <label class="option-card"
+                    ><input
+                      type="checkbox"
+                      name="event"
+                      value="swap"
+                      title="Peças comuns de cada lado trocam de posição sem colocar reis em xeque."
+                      checked
+                    /><span class="option-check"></span><span class="option-symbol amber">⇄</span
+                    ><span class="option-text"
+                      ><b>Troca de identidade</b><small>Aliados trocam de lugar.</small></span
+                    ></label
+                  >
+                  <label class="option-card"
+                    ><input
+                      type="checkbox"
+                      name="event"
+                      value="mines"
+                      title="Quatro minas invisíveis aparecem no centro e eliminam a primeira peça vulnerável que pisar nelas."
+                    /><span class="option-check"></span><span class="option-symbol amber">⚠</span
+                    ><span class="option-text"
+                      ><b>Campo minado</b><small>Quatro minas invisíveis.</small></span
+                    ></label
+                  >
+                </div>
+              </div>
+              <div class="mechanic-group">
+                <div class="group-label">
+                  <span class="group-icon icon-card">▤</span>
+                  <div>
+                    <h3>Cartas & poderes</h3>
+                    <button
+                      class="help-tip"
+                      type="button"
+                      aria-label="Sobre cartas e poderes"
+                      title="Cada lado começa com três cartas aleatórias. Uma carta normal pode ser usada por turno; capturas de peças maiores podem render novas cartas."
+                    >
+                      ?
+                    </button>
+                    <p>3 cartas iniciais; capturas rendem mais. Limite de 1 por turno.</p>
+                  </div>
+                  <label class="switch"
+                    ><input id="toggle-cards" type="checkbox" checked /><span></span
+                  ></label>
+                </div>
+                <div class="card-preview-row">
+                  <span class="mini-card">✦</span><span class="mini-card">◈</span
+                  ><span class="mini-card">↯</span
+                  ><span class="card-preview-note"
+                    >Traição, escudo, ressurreição e muito mais.</span
+                  >
+                </div>
+                <div class="mechanic-subtoggles">
+                  <label class="mechanic-toggle"
+                    ><input id="toggle-individual-cards" type="checkbox" checked /><span
+                      class="toggle-track"
+                    ></span
+                    ><span><b>Cartas</b><small>Decks e cartas de captura</small></span></label
+                  >
+                </div>
+                <div id="card-icons" class="card-icons" aria-label="Cartas permitidas"></div>
+                <label class="mechanic-toggle class-toggle-inline">
+                  <input id="toggle-classes" type="checkbox" checked />
+                  <span class="toggle-track"></span>
+                  <span>
+                    <b>Classes &amp; poderes</b>
+                    <small>Uma habilidade por lado</small>
+                  </span>
+                </label>
+                <div id="classes-options" class="class-config">
+                  <div class="class-icons-row">
+                    <div id="class-icons" class="class-icons" aria-label="Classes permitidas"></div>
+                    <label class="random-class">
+                      <input id="random-classes" type="checkbox" />
+                      <span class="toggle-track"></span>
+                      <span>
+                        <b>Sortear classes</b>
+                        <small>Definidas aleatoriamente no início</small>
+                      </span>
+                    </label>
+                  </div>
+                  <div class="class-selection-note">
+                    Desativado: os dois lados escolhem antes da partida.
+                  </div>
+                </div>
+              </div>
+              <div class="mechanic-group last-group">
+                <div class="group-label">
+                  <span class="group-icon icon-mode">⌘</span>
+                  <div>
+                    <h3>Modos de jogo</h3>
+                    <button
+                      class="help-tip"
+                      type="button"
+                      aria-label="Sobre modos de regras"
+                      title="Escolha uma variante de jogo. Neste protótipo, uma pessoa controla os dois lados localmente."
+                    >
+                      ?
+                    </button>
+                    <p>Escolha uma variante para a partida local.</p>
+                  </div>
+                </div>
+                <div class="mode-grid">
+                  <button
+                    class="mode-card selected"
+                    type="button"
+                    data-mode="classic"
+                    title="Xadrez base com cartas e eventos ambientais ativados conforme as opções."
+                    aria-pressed="true"
+                  >
+                    <span class="mode-top"><span>♟</span><span class="mode-tag">PADRÃO</span></span
+                    ><b>Caos clássico</b><small>O xadrez com suas mecânicas extras.</small>
+                  </button>
+                  <button
+                    class="mode-card"
+                    type="button"
+                    data-mode="roulette"
+                    title="Antes de cada lance, uma roleta exige um tipo de peça; sem lance disponível, a vez é perdida."
+                    aria-pressed="false"
+                  >
+                    <span class="mode-top"
+                      ><span>◉</span><span class="mode-tag">ALEATÓRIO</span></span
+                    ><b>Roleta russa</b><small>A roleta decide qual peça mover.</small>
+                  </button>
+                  <button
+                    class="mode-card"
+                    type="button"
+                    data-mode="evolution"
+                    title="Uma peça que captura evolui para a próxima categoria, até Rainha."
+                    aria-pressed="false"
+                  >
+                    <span class="mode-top"
+                      ><span>↑</span><span class="mode-tag">EVOLUÇÃO</span></span
+                    ><b>Evolução</b><small>Peças capturadoras ficam mais fortes.</small>
+                  </button>
+                  <button
+                    class="mode-card"
+                    type="button"
+                    data-mode="fog"
+                    title="Cada jogador vê as casas alcançadas pelas próprias peças e as peças visíveis à sua volta."
+                    aria-pressed="false"
+                  >
+                    <span class="mode-top"
+                      ><span>◌</span><span class="mode-tag">VISÃO LIMITADA</span></span
+                    ><b>Névoa de guerra</b
+                    ><small>Veja apenas as casas alcançadas pelas suas peças.</small>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <aside class="setup-aside">
+              <div class="aside-stamp">♜</div>
+              <span class="aside-kicker">SEM PRESSA. SEM ADVERSÁRIO.</span>
+              <h3>Modo treino.<br /><em>Dois lados.</em></h3>
+              <p>
+                Comande os dois exércitos no mesmo tabuleiro. Combine poderes, dobre o destino e
+                descubra quem reivindica a vitória.
+              </p>
+              <div class="aside-rule"></div>
+              <div class="aside-stat">
+                <span>JOGADORES</span><b>1 <i>·</i> local</b>
+              </div>
+              <div class="aside-stat"><span>REGRAS BASE</span><b>chess.js</b></div>
+              <div class="aside-stat"><span>SEU OBJETIVO</span><b>Sobreviver.</b></div>
+              <button id="start-game" class="button button-start">
+                Começar partida <span>↗</span>
+              </button>
+              <div class="keyboard-hint"><kbd>ESC</kbd> reinicia a partida</div>
+            </aside>
+          </div>
+          <footer class="setup-footer">
+            <span>CHECKMAGE <i>—</i> FORJE SUA PRÓPRIA LENDA</span
+            ><span><a href="/credits.html">Créditos & licenças</a> <i>·</i> VERSÃO 0.1</span>
+          </footer>
+        </section>
+
+        <section id="game-screen" class="game-screen hidden">
+          <div class="game-heading">
+            <div>
+              <div class="eyebrow"><span class="live-dot"></span> PARTIDA EM ANDAMENTO</div>
+              <h1>A batalha foi <span>traçada.</span></h1>
+            </div>
+            <div class="game-actions">
+              <button id="restart-btn" class="button button-quiet" type="button">↻ Reiniciar</button
+              ><button id="back-setup" class="button button-quiet" type="button">
+                ⚙ Configurar
+              </button>
+            </div>
+          </div>
+          <div class="game-layout">
+            <section class="board-column">
+              <div id="turn-banner" class="turn-banner">
+                <span class="turn-piece">♙</span>
+                <div><small>VEZ DE</small><b id="turn-name">Brancas</b></div>
+                <span id="check-badge" class="check-badge hidden">XEQUE</span
+                ><span class="turn-spacer"></span
+                ><span id="move-count" class="move-count">MOVIMENTO 01</span>
+              </div>
+              <div id="card-selection" class="card-selection hidden">
+                <span id="card-selection-text"></span>
+                <div
+                  id="resurrection-choices"
+                  class="resurrection-choices hidden"
+                  aria-label="Escolha uma peça para ressuscitar"
+                ></div>
+                <button id="cancel-card" type="button">Cancelar carta <kbd>Esc</kbd></button>
+              </div>
+              <div class="board-wrap">
+                <button
+                  id="class-portrait-black"
+                  class="class-portrait class-portrait-top hidden"
+                  data-portrait-side="b"
+                  type="button"
+                  aria-label="Ativar poder das Pretas"
+                ></button>
+                <div
+                  id="board"
+                  class="chessboard"
+                  role="grid"
+                  aria-label="Tabuleiro de xadrez"
+                ></div>
+                <button
+                  id="class-portrait-white"
+                  class="class-portrait class-portrait-bottom hidden"
+                  data-portrait-side="w"
+                  type="button"
+                  aria-label="Ativar poder das Brancas"
+                ></button>
+                <section
+                  id="grimoire-picker"
+                  class="grimoire-picker hidden"
+                  role="dialog"
+                  aria-label="Escolha uma carta para o Grimório"
+                ></section>
+                <div
+                  id="class-draft"
+                  class="class-draft hidden"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="class-draft-title"
+                ></div>
+              </div>
+              <section id="capture-stats" class="capture-stats" aria-label="Capturas e material">
+                <div class="capture-player" data-capture-side="w"></div>
+                <div id="material-balance" class="material-balance" aria-label="Vantagem material"></div>
+                <div class="capture-player" data-capture-side="b"></div>
+              </section>
+              <div id="event-banner" class="event-banner hidden"></div>
+            </section>
+            <aside class="game-sidebar">
+              <section class="side-panel event-panel">
+                <div class="panel-title">
+                  <div>
+                    <span class="panel-icon">✳</span>
+                    <h2>Próximo evento</h2>
+                  </div>
+                  <span class="round-chip" id="round-chip">RODADA 1</span>
+                </div>
+                <div id="next-event" class="next-event">
+                  <span class="event-orb">✦</span>
+                  <div><b>O tabuleiro observa.</b><small>O caos começa em 5 rodadas.</small></div>
+                </div>
+                <div class="event-progress"><span id="progress-bar"></span></div>
+              </section>
+              <section id="hands-panel" class="side-panel">
+                <div class="panel-title">
+                  <div>
+                    <span class="panel-icon card-icon">▤</span>
+                    <h2>Mão de cartas</h2>
+                  </div>
+                  <span class="round-chip">✦ <span id="hand-count">0</span></span>
+                </div>
+                <div class="hand-tabs">
+                  <button class="hand-tab active" data-hand="w">
+                    ♙ Brancas <span id="white-card-count">0</span></button
+                  ><button class="hand-tab" data-hand="b">
+                    ♟ Pretas <span id="black-card-count">0</span>
+                  </button>
+                </div>
+                <div id="hand-cards" class="hand-cards"></div>
+                <div id="card-hint" class="card-hint">Cartas pertencem ao jogador da vez.</div>
+              </section>
+              <section class="side-panel move-panel">
+                <div class="panel-title">
+                  <div>
+                    <span class="panel-icon move-icon">↗</span>
+                    <h2>Histórico</h2>
+                  </div>
+                  <div class="history-controls">
+                    <div class="history-tabs">
+                      <button
+                        class="history-tab active"
+                        type="button"
+                        data-view="moves"
+                        aria-pressed="true"
+                      >
+                        Lances</button
+                      ><button
+                        class="history-tab"
+                        type="button"
+                        data-view="activity"
+                        aria-pressed="false"
+                        title="Cartas usadas e eventos ocorridos"
+                      >
+                        Caos
+                      </button>
+                    </div>
+                    <span class="round-chip" id="ply-count">0 LANCES</span>
+                  </div>
+                </div>
+                <div id="move-list" class="move-list">
+                  <div class="empty-moves">A primeira jogada é sua.</div>
+                </div>
+                <div id="activity-list" class="activity-list hidden"></div>
+              </section>
+              <div class="sidebar-note">
+                <span>✦</span>
+                <p>Dois exércitos, um campo de batalha. <b>Que vença sua estratégia.</b></p>
+              </div>
+            </aside>
+          </div>
+          <footer class="game-footer">
+            <span>CHECKMAGE <i>—</i> PARTIDA LOCAL</span
+            ><a
+              class="asset-credit"
+              href="https://nulltale.itch.io/heroes-chess"
+              target="_blank"
+              rel="noopener noreferrer"
+              >Peças: Null Tale · CC BY 4.0</a
+            ><a href="/credits.html">Créditos & licenças</a
+            ><span id="mode-label">CAOS CLÁSSICO</span>
+          </footer>
+        </section>
+      </main>
+    </div>
+    <div id="modal-root"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

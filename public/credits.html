@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#171612" />
+    <title>Créditos e transparência — Checkmage</title>
+    <link rel="icon" type="image/svg+xml" href="/checkmage.svg" />
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: system-ui, sans-serif;
+        background: #14130f;
+        color: #e9e4d7;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: radial-gradient(ellipse at 50% -35%, #3b3120, transparent 58%), #14130f;
+      }
+      .page {
+        width: min(820px, calc(100% - 40px));
+        margin: auto;
+        padding: 50px 0 70px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: #eee;
+        text-decoration: none;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        margin-bottom: 58px;
+      }
+      .brand img {
+        filter: drop-shadow(0 0 8px #c6a26242);
+      }
+      .eyebrow {
+        font: 10px monospace;
+        letter-spacing: 0.12em;
+        color: #d5b77a;
+      }
+      .eyebrow:before {
+        content: '';
+        display: inline-block;
+        width: 22px;
+        height: 1px;
+        background: #d5b77a;
+        vertical-align: middle;
+        margin-right: 9px;
+      }
+      h1 {
+        font-size: clamp(38px, 7vw, 64px);
+        line-height: 1;
+        letter-spacing: -0.05em;
+        margin: 16px 0;
+      }
+      h1 span {
+        color: #d5b77a;
+      }
+      .intro {
+        max-width: 620px;
+        color: #b0a994;
+        font-size: 14px;
+        line-height: 1.8;
+        margin-bottom: 34px;
+      }
+      .card {
+        padding: 21px 24px;
+        margin: 12px 0;
+        border: 1px solid #a78c5a36;
+        border-radius: 6px;
+        background: linear-gradient(145deg, #201e18, #191813);
+      }
+      h2 {
+        font-size: 16px;
+        color: #e3d4af;
+        margin: 0 0 12px;
+      }
+      p {
+        font-size: 12px;
+        line-height: 1.75;
+        color: #aaa38f;
+        margin: 8px 0;
+      }
+      a {
+        color: #d8c28f;
+        text-underline-offset: 3px;
+      }
+      .back {
+        display: inline-block;
+        margin-top: 22px;
+        padding: 10px 15px;
+        border: 1px solid #ffffff2e;
+        border-radius: 5px;
+        text-decoration: none;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <a class="brand" href="/"
+        ><img src="/checkmage.svg" alt="" width="34" height="34" /><span>CHECKMAGE</span></a
+      >
+      <p class="eyebrow">TRANSPARÊNCIA DO PROJETO</p>
+      <h1>Créditos & <span>licenças</span></h1>
+      <p class="intro">
+        Checkmage é um protótipo independente de xadrez caótico, desenvolvido com assistência de
+        inteligência artificial. Os créditos abaixo identificam os componentes e assets de terceiros
+        usados nesta versão.
+      </p>
+      <section class="card">
+        <h2>Peças de xadrez</h2>
+        <p>
+          <b>Heroes Chess</b>, por Null Tale. Sprite sheet usado como arte das peças, com recortes e
+          transparência preparados pelo projeto.
+        </p>
+        <p>
+          Licença:
+          <a
+            href="https://creativecommons.org/licenses/by/4.0/"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Creative Commons Attribution 4.0 International (CC BY 4.0)</a
+          >.
+        </p>
+        <p>
+          Fonte:
+          <a href="https://nulltale.itch.io/heroes-chess" target="_blank" rel="noopener noreferrer"
+            >nulltale.itch.io/heroes-chess</a
+          >.
+        </p>
+      </section>
+      <section class="card">
+        <h2>Regras de xadrez</h2>
+        <p><b>chess.js 1.4.0</b>, biblioteca de regras usada pelo protótipo.</p>
+        <p>
+          Licença: BSD 2-Clause.
+          <a href="https://github.com/jhlywa/chess.js" target="_blank" rel="noopener noreferrer"
+            >Código-fonte e licença</a
+          >.
+        </p>
+      </section>
+      <section class="card">
+        <h2>Tipografia</h2>
+        <p>
+          As famílias <b>DM Sans</b>, <b>DM Mono</b> e <b>Space Grotesk</b> são servidas por Google
+          Fonts. As famílias são distribuídas sob a licença SIL Open Font License (OFL).
+        </p>
+        <p>
+          Fonte:
+          <a href="https://fonts.google.com/" target="_blank" rel="noopener noreferrer"
+            >Google Fonts</a
+          >.
+        </p>
+      </section>
+      <section class="card">
+        <h2>Licença do projeto</h2>
+        <p>
+          O código-fonte do Checkmage (exceto assets e dependências de terceiros) é licenciado
+          sob a <b>GNU Affero General Public License v3 (AGPLv3)</b>.
+        </p>
+        <p>
+          A AGPLv3 é uma licença copyleft forte: se você modificar o software e o executar em um
+          servidor acessível por usuários pela rede, deve disponibilizar o código-fonte correspondente
+          a esses usuários. Isso garante que a liberdade de uso, estudo, modificação e compartilhamento
+          seja preservada mesmo em deployments de rede.
+        </p>
+        <p>
+          Texto completo:
+          <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener noreferrer"
+            >GNU AGPLv3</a
+          >.
+        </p>
+      </section>
+      <section class="card">
+        <h2>Interface e outros recursos</h2>
+        <p>
+          Identidade Checkmage, ícone, texturas do tabuleiro e efeitos de áudio sintetizados são
+          autorais deste projeto.
+        </p>
+        <p>
+          Empacotamento local: Vite 6.4.6. Este projeto está em desenvolvimento e ainda não foi
+          publicado.
+        </p>
+      </section>
+      <section class="card">
+        <h2>Tecnologia e autoria</h2>
+        <p>
+O Checkmage é um jogo gratuito e de código aberto. O código original do projeto é
+           distribuído sob a licença GNU AGPLv3 (Affero General Public License v3);
+           assets e dependências de terceiros seguem as licenças
+           descritas nesta página. A implementação e os recursos próprios foram criados com
+           assistência de inteligência artificial (OpenAI Codex).
+        </p>
+        <p>
+          Tecnologias: HTML, CSS e JavaScript; Node.js para o ambiente local; Vite para
+          desenvolvimento e empacotamento; chess.js para as regras de xadrez; Web Audio API para
+          áudio procedural.
+        </p>
+      </section>
+      <a class="back" href="/">← Voltar ao jogo</a>
+    </main>
+  </body>
+</html>

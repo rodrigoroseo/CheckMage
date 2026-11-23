@@ -1,0 +1,24 @@
+{
+  "name": "xadrez-caos",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "format": "prettier --write index.html README.md public/credits.html src/**/*.{js,css,json} scripts/**/*.mjs",
+    "format:check": "prettier --check index.html README.md public/credits.html src/**/*.{js,css,json} scripts/**/*.mjs"
+  },
+  "dependencies": {
+    "chess.js": "^1.4.0"
+  },
+  "devDependencies": {
+    "prettier": "^3.10.1",
+    "vite": "^6.0.0"
+  }
+}

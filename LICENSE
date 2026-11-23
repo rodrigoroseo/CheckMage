@@ -1,0 +1,46 @@
+GNU AFFERO GENERAL PUBLIC LICENSE
+                   Version 3, 29 June 2008
+
+Copyright (C) 2008 Free Software Foundation, Inc. <https://fsf.org/>
+Everyone is permitted to copy and distribute verbatim copies
+of this license document, but changing it is not allowed
+
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU Affero General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU Affero General Public License for more details.
+
+ You should have received a copy of the GNU Affero General Public License
+ along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+The GNU Affero General Public License is a copyleft license for software
+and other works. It is based on the GNU General Public License version 3,
+but with the additional term that the Corresponding Source for a work
+must also be made available to the program's users when the program is
+run on a server.
+
+Thus, the Affero GPL is intended to ensure that, in running a publicly-owned
+or operated server, users receive the source code of the modified version
+running on that server.
+
+In addition to the terms of the GNU General Public License version 3,
+the Affero GPL has the following additional term:
+
+Notwithstanding any other provision of this License, if you modify the
+Program, as defined in section 1, and propagate a work based on the
+Program, the Corresponding Source propagated must include the machine-readable
+ Corresponding Source for the Program. In addition, you must cause the
+ Propagated Work to provide the users the opportunity to receive the
+ Corresponding Source from you, if you propagate a work based on the Program,
+ over a computer network.  Specifically, if you propagate a work based on
+ the Program over a computer network, the Corresponding Source propagated
+ must include the availability to download the Corresponding Source from
+ a designated place, or offer equivalent access to the Corresponding Source
+ in a manner consistent with the licensing of the rest of the work.
+
+END OF LICENSE

@@ -1,0 +1,10 @@
+node_modules/
+.pnpm-store/
+dist/
+.tools/node/
+patch-notes/
+TODO.txt
+src/assets/Heroes3_Pieces_transparent.png
+*.log
+.DS_Store
+Thumbs.db

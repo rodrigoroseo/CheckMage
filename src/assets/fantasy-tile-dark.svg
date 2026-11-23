@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" shape-rendering="crispEdges">
+  <defs>
+    <linearGradient id="slate" x2="0" y2="1"><stop stop-color="#4a3b48"/><stop offset="1" stop-color="#302a38"/></linearGradient>
+    <pattern id="grain" width="16" height="16" patternUnits="userSpaceOnUse">
+      <path d="M0 1h8v2H3v2h10v2H5v2h8v2H2v2h7v2H0zm10 11h5v2h-8v2h9" fill="#100f19" opacity=".42"/>
+      <path d="M4 4h2v1H4zm9 5h2v1h-2zM5 13h2v1H5z" fill="#c29a75" opacity=".2"/>
+    </pattern>
+  </defs>
+  <path fill="url(#slate)" d="M0 0h64v64H0z"/>
+  <path fill="url(#grain)" d="M0 0h64v64H0z"/>
+  <path d="M2 2h60v1H2zm0 59h60v1H2zM2 3h1v58H2zm59 0h1v58h-1z" fill="#b9916e" opacity=".21"/>
+  <path d="M28 25h8v2h-6v4h4v2h-4v4h6v2h-8v-6h-2v-4h2zm-1-4h2v2h-2zm8 20h2v2h-2z" fill="#d3ae83" opacity=".12"/>
+  <path d="M8 8h2v2H8zm47 3h3v2h-3zM12 49h2v3h-2zm37 4h3v2h-3z" fill="#171421" opacity=".55"/>
+</svg>
