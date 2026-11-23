@@ -3788,7 +3788,6 @@ function startMultiplayerGame(fen, opts) {
   state.game = new Chess();
   if (fen) state.game.load(fen);
   state.opts = opts || chosenMPSetup();
-  state.opts.mode = 'classic';
   state.selected = null;
   state.legal = [];
   state.moves = [];
@@ -3837,12 +3836,22 @@ function startMultiplayerGame(fen, opts) {
   $('#multiplayer-screen').classList.add('hidden');
   $('#setup-screen').classList.add('hidden');
   $('#game-screen').classList.remove('hidden');
-  $('#mode-label').textContent = 'MULTIJOGADOR';
+  $('#mode-label').textContent = modeNames[state.opts.mode] || 'MULTIJOGADOR';
   $('.game-heading .eyebrow').innerHTML = '<span class="live-dot"></span> PARTIDA MULTIJOGADOR';
   $('.game-heading h1').innerHTML = 'Sala <span>' + MP.code + '</span>';
-  $('#hands-panel').classList.add('hidden');
-  startAmbient('game');
-  render();
+  $('#hands-panel').classList.toggle('hidden', !state.opts.cards && !state.opts.classes);
+  $('#event-banner').classList.add('hidden');
+  prepareEventForecast();
+  if (state.opts.classes && state.enabledClasses.length && !state.classRandom) {
+    state.classDraft = { step: 0, picks: { w: null, b: null } };
+    $('.game-heading .eyebrow').innerHTML = '<span class="live-dot"></span> PREPARAÇÃO DA PARTIDA';
+    $('.game-heading h1').innerHTML = 'Escolha os <span>poderes.</span>';
+    render();
+    return;
+  }
+  if (state.opts.classes && state.enabledClasses.length)
+    state.classes = { w: random(state.enabledClasses), b: random(state.enabledClasses) };
+  beginMatch();
 }
 function showMultiplayer() {
   $('#setup-screen').classList.add('hidden');
