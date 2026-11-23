@@ -2224,13 +2224,15 @@ function postMoveCleanup(side, captured) {
   state.stunned = state.stunned.filter((x) => x.color !== side);
   state.eventHighlights = [];
   const movedColor = side;
-  state.eventPly++;
-  if (movedColor === 'b') {
-    state.round++;
-    tickClassRounds();
-    if (state.opts.events && state.eventPly >= 20) {
-      state.eventPly = 0;
-      triggerEvent();
+  if (!MP.connected) {
+    state.eventPly++;
+    if (movedColor === 'b') {
+      state.round++;
+      tickClassRounds();
+      if (state.opts.events && state.eventPly >= 20) {
+        state.eventPly = 0;
+        triggerEvent();
+      }
     }
   }
   processScheduledBishops();
@@ -3821,7 +3823,37 @@ function mpHandleMessage(msg) {
       if (msg.classes.b) state.classes.b = msg.classes.b;
       beginMatch();
       break;
+    case 'eventTrigger':
+      applyRemoteEvent(msg);
+      break;
+    case 'eventForecast':
+      state.eventForecast = { type: msg.eventType, squares: [] };
+      render();
+      break;
   }
+}
+function applyRemoteEvent(msg) {
+  // Clear old event visuals
+  state.holes = msg.holes || [];
+  state.portals = msg.portals || [];
+  state.mines = msg.mines || [];
+  state.eventHighlights = [];
+  state.eventType = msg.type;
+  playSound(msg.type);
+  // Apply swap pieces
+  if (msg.swaps) {
+    for (const s of msg.swaps) swapPieces(s.a, s.b);
+  }
+  // Show event banner with server-provided data
+  const title = eventInfo[msg.type][0];
+  let desc = eventInfo[msg.type][1];
+  if (msg.type === 'quake' && msg.holes) desc = `Abismos nas casas ${msg.holes.join(' e ')}. ${eventInfo[msg.type][1]}`;
+  if (msg.type === 'portal' && msg.portals) desc = `Portais ativos em ${msg.portals.join(' e ')}. Pouse em um para atravessar.`;
+  if (msg.type === 'mines') desc = `Quatro minas invisíveis foram espalhadas entre as fileiras 3 e 6. ${eventInfo[msg.type][1]}`;
+  $('#event-banner').textContent = `✳ ${title} — ${desc}`;
+  $('#event-banner').classList.remove('hidden');
+  toast(title + '! ' + desc);
+  recordActivity('event', title, desc, state.game.turn());
 }
 function mpSendMove(from, to, promotion, fen) {
   if (!MP.ws || MP.ws.readyState !== 1) return;
@@ -3892,7 +3924,8 @@ function startMultiplayerGame(fen, opts) {
   $('.game-heading h1').innerHTML = 'Sala <span>' + MP.code + '</span>';
   $('#hands-panel').classList.toggle('hidden', !state.opts.cards && !state.opts.classes);
   $('#event-banner').classList.add('hidden');
-  prepareEventForecast();
+  // Em multiplayer, eventos são coordenados pelo servidor via eventTrigger
+  if (!MP.connected) prepareEventForecast();
   if (state.opts.classes && state.enabledClasses.length && !state.classRandom) {
     const mySide = MP.side || 'w';
     state.classDraft = { step: 0, picks: { [mySide]: null } };
