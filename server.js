@@ -81,11 +81,17 @@ wss.on('connection', (ws, req) => {
   room.lastActivity = Date.now();
   const playerIndex = room.players.push(ws) - 1;
 
-  ws.send(JSON.stringify({ type: 'joined', player: playerIndex + 1, players: room.players.length }));
+  // Sorteia os lados: primeiro jogador fica com o lado que sortear.
+  if (!room.sides) {
+    room.sides = Math.random() < 0.5 ? ['w', 'b'] : ['b', 'w'];
+  }
+  const mySide = room.sides[playerIndex];
+
+  ws.send(JSON.stringify({ type: 'joined', player: playerIndex + 1, players: room.players.length, side: mySide }));
 
   if (room.players.length === 2) {
     room.started = true;
-    broadcast(room, { type: 'start', fen: room.fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', opts: room.opts });
+    broadcast(room, { type: 'start', fen: room.fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', opts: room.opts, sides: room.sides });
   }
 
   ws.on('message', (data) => {
@@ -97,6 +103,13 @@ wss.on('connection', (ws, req) => {
         // Relay de movimento para o outro jogador
         broadcast(room, { type: 'move', from: msg.from, to: msg.to, promotion: msg.promotion }, ws);
         room.turn = room.turn === 'w' ? 'b' : 'w';
+      } else if (msg.type === 'classPick') {
+        // Guarda a escolha de classe e repassa para o outro jogador
+        room.classPicks = room.classPicks || {};
+        room.classPicks[msg.side] = msg.class;
+        if (room.classPicks.w && room.classPicks.b) {
+          broadcast(room, { type: 'classReady', classes: { w: room.classPicks.w, b: room.classPicks.b } });
+        }
       } else if (msg.type === 'resign') {
         broadcast(room, { type: 'resign', player: playerIndex + 1 });
       } else if (msg.type === 'drawOffer') {

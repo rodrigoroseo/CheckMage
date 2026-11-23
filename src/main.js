@@ -149,6 +149,7 @@ const MP = {
   room: null,
   code: null,
   player: null,
+  side: null,
   ws: null,
   connected: false,
   opponentJoined: false,
@@ -634,15 +635,18 @@ function renderClassDraft() {
   root.classList.toggle('hidden', !draft);
   $('#board').classList.toggle('board-draft-dim', Boolean(draft));
   if (!draft) return;
-  const side = draft.step === 0 ? 'w' : 'b',
-    label = side === 'w' ? 'Brancas' : 'Pretas',
-    selected = draft.picks[side];
+  const side = Object.keys(draft.picks)[0] || 'w';
+  const label = side === 'w' ? 'Brancas' : 'Pretas';
+  const selected = draft.picks[side];
+  const isMulti = MP.connected;
   root.innerHTML =
-    '<div class="draft-kicker">ESCOLHA DE CLASSE · ' +
-    (draft.step + 1) +
-    '/2</div><h2 id="class-draft-title">' +
+    '<div class="draft-kicker">ESCOLHA DE CLASSE</div><h2 id="class-draft-title">' +
     label +
-    ', escolha sua classe</h2><p>Cada lado define seu próprio poder antes do primeiro lance.</p><div class="draft-classes">' +
+    ', escolha sua classe</h2><p>' +
+    (isMulti
+      ? 'Escolha o poder do seu lado antes de começar.'
+      : 'Cada lado define seu próprio poder antes do primeiro lance.') +
+    '</p><div class="draft-classes">' +
     state.enabledClasses
       .map((id) => {
         const cls = classInfo[id];
@@ -666,7 +670,7 @@ function renderClassDraft() {
     '</div><div class="draft-actions"><button type="button" class="button" id="draft-cancel">Cancelar</button><button type="button" class="button button-start" id="draft-confirm" ' +
     (selected ? '' : 'disabled') +
     '>' +
-    (draft.step === 0 ? 'Confirmar Brancas' : 'Iniciar partida') +
+    (isMulti ? 'Confirmar' : draft.step === 0 ? 'Confirmar Brancas' : 'Iniciar partida') +
     ' <span>↗</span></button></div>';
   $$('[data-draft-class]', root).forEach((button) =>
     button.addEventListener('click', () => {
@@ -677,7 +681,18 @@ function renderClassDraft() {
   $('#draft-cancel', root).addEventListener('click', showSetup);
   $('#draft-confirm', root).addEventListener('click', () => {
     if (!draft.picks[side]) return;
-    if (draft.step === 0) {
+    if (isMulti) {
+      state.classes[side] = draft.picks[side];
+      MP.ws &&
+        MP.ws.readyState === 1 &&
+        MP.ws.send(JSON.stringify({ type: 'classPick', side, class: draft.picks[side] }));
+      if (state.classes.w && state.classes.b) beginMatch();
+      else {
+        $('.game-heading .eyebrow').innerHTML = '<span class="live-dot"></span> ESPERANDO ADVERSÁRIO';
+        $('.game-heading h1').innerHTML = 'Seu oponente está escolhendo a classe.';
+        render();
+      }
+    } else if (draft.step === 0) {
       draft.step = 1;
       renderClassDraft();
     } else {
@@ -875,8 +890,13 @@ function useClassPower(index, skipCounterspell = false) {
     toast('Aguarde a peça concluir o movimento.');
     return;
   }
-  const side = state.game.turn(),
-    cls = state.classes[side],
+  const side = state.game.turn();
+  // Em multiplayer, só pode usar poder do lado controlado por este jogador
+  if (MP.connected && side !== (MP.side || 'w')) {
+    toast('Use o poder do lado que está na vez.');
+    return;
+  }
+  const cls = state.classes[side],
     power = state.classPower[side];
   if (!cls || power.charges < 1) {
     toast('Sem cargas disponíveis.');
@@ -1438,6 +1458,11 @@ function onSquare(s) {
     }
     playSound('illegal');
   }
+  // Em multiplayer, peça só pode ser selecionada pelo lado controlado por este jogador
+  if (MP.connected && p && p.color !== (MP.side || 'w')) {
+    playSound('illegal');
+    return;
+  }
   if (p && p.color === state.game.turn()) {
     selectPiece(s, p);
     return;
@@ -1566,6 +1591,8 @@ function startPointerDrag(event, square) {
   if (event.button !== 0 || state.pendingCard || state.ended || state.classDraft || state.motion)
     return;
   const piece = pieceAt(square);
+  // Em multiplayer, pode arrastar apenas peças do lado controlado por este jogador
+  if (MP.connected && piece && piece.color !== (MP.side || 'w')) return;
   if (!piece || piece.color !== state.game.turn()) return;
   state.pointerDrag = {
     from: square,
@@ -2876,6 +2903,11 @@ function useCard(i, skipCounterspell = false, forcedId = null, classPower = fals
     return;
   }
   const side = state.game.turn();
+  // Em multiplayer, só pode usar cartas do lado controlado por este jogador
+  if (MP.connected && side !== (MP.side || 'w')) {
+    toast('Use as cartas do lado que está na vez.');
+    return;
+  }
   if (state.pendingCard) {
     toast('Conclua ou cancele a carta que já está selecionada.');
     return;
@@ -3748,6 +3780,7 @@ function mpHandleMessage(msg) {
   switch (msg.type) {
     case 'joined':
       MP.player = msg.player;
+      MP.side = msg.side;
       MP.opponentJoined = msg.players >= 2;
       if (MP.opponentJoined) {
         toast('Adversário entrou. Partida começando!');
@@ -3759,6 +3792,7 @@ function mpHandleMessage(msg) {
       break;
     case 'start':
       MP.opponentJoined = true;
+      MP.side = msg.sides && msg.sides[MP.player - 1] ? msg.sides[MP.player - 1] : MP.side || 'w';
       toast('Partida começou!');
       startMultiplayerGame(msg.fen, msg.opts);
       break;
@@ -3774,6 +3808,15 @@ function mpHandleMessage(msg) {
     case 'error':
       toast(msg.message || 'Erro na sala.');
       break;
+    case 'classPick':
+      state.classes[msg.side] = msg.class;
+      if (state.classes.w && state.classes.b) beginMatch();
+      break;
+    case 'classReady':
+      if (msg.classes.w) state.classes.w = msg.classes.w;
+      if (msg.classes.b) state.classes.b = msg.classes.b;
+      beginMatch();
+      break;
   }
 }
 function mpSendMove(from, to, promotion) {
@@ -3783,6 +3826,10 @@ function mpSendMove(from, to, promotion) {
 function mpSendResign() {
   if (!MP.ws || MP.ws.readyState !== 1) return;
   MP.ws.send(JSON.stringify({ type: 'resign' }));
+}
+function mpSendClassPick(classId) {
+  if (!MP.ws || MP.ws.readyState !== 1) return;
+  MP.ws.send(JSON.stringify({ type: 'classPick', side: MP.side, class: classId }));
 }
 function startMultiplayerGame(fen, opts) {
   state.game = new Chess();
@@ -3815,7 +3862,7 @@ function startMultiplayerGame(fen, opts) {
   state.roundMaterialBaseline = 0;
   state.sacrificeUsed = { w: false, b: false };
   state.cardsUsed = { w: false, b: false };
-  state.handSide = 'w';
+  state.handSide = MP.side || 'w';
   state.pendingCard = null;
   state.counterspellPending = null;
   state.mateResponseOffered = false;
@@ -3843,9 +3890,11 @@ function startMultiplayerGame(fen, opts) {
   $('#event-banner').classList.add('hidden');
   prepareEventForecast();
   if (state.opts.classes && state.enabledClasses.length && !state.classRandom) {
-    state.classDraft = { step: 0, picks: { w: null, b: null } };
-    $('.game-heading .eyebrow').innerHTML = '<span class="live-dot"></span> PREPARAÇÃO DA PARTIDA';
-    $('.game-heading h1').innerHTML = 'Escolha os <span>poderes.</span>';
+    const mySide = MP.side || 'w';
+    state.classDraft = { step: 0, picks: { [mySide]: null } };
+    $('.game-heading .eyebrow').innerHTML = '<span class="live-dot"></span> ESCOLHA DE CLASSE';
+    $('.game-heading h1').innerHTML =
+      mySide === 'w' ? 'Escolha sua <span>classe.</span>' : 'Escolha sua <span>classe.</span>';
     render();
     return;
   }
