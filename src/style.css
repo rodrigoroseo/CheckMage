@@ -4327,3 +4327,170 @@ body {
 .square.drag-source .piece {
   opacity: 0 !important;
 }
+
+/* Multiplayer lobby */
+.multiplayer-options {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin: 20px 0;
+}
+.multiplayer-options .mode-card {
+  min-height: 80px;
+  padding: 14px;
+  border: 1px solid #b895ff40;
+  border-radius: 6px;
+  background: #b895ff10;
+  cursor: pointer;
+  text-align: left;
+}
+.multiplayer-options .mode-card:hover {
+  border-color: #d9a952;
+  background: #d9a95220;
+}
+.multiplayer-options .mode-card.selected {
+  border-color: #d9a952;
+  background: #d9a95220;
+  box-shadow: 0 0 12px #d9a95220;
+}
+.multiplayer-options .mode-card .mode-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.multiplayer-options .mode-card .mode-top span {
+  font-size: 18px;
+  color: #d9a952;
+}
+.multiplayer-options .mode-card .mode-tag {
+  font: 7px 'DM Mono', monospace;
+  letter-spacing: 0.13em;
+  color: #aaa;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: #d9a95215;
+  border: 1px solid #d9a95240;
+}
+.multiplayer-options .mode-card b {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: #e3d4af;
+  margin-bottom: 4px;
+}
+.multiplayer-options .mode-card small {
+  display: block;
+  font-size: 9px;
+  color: #a49b88;
+  line-height: 1.4;
+}
+
+.room-creation {
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid #a78c5a36;
+  border-radius: 6px;
+  background: #201d16;
+}
+.room-code-display,
+.room-url-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.room-code-label {
+  font: 7px 'DM Mono', monospace;
+  letter-spacing: 0.12em;
+  color: #a49b88;
+  flex-shrink: 0;
+}
+.room-code {
+  font: 700 18px 'DM Mono', monospace;
+  color: #e7d59b;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: #d9a95210;
+  letter-spacing: 0.15em;
+}
+.room-url {
+  font: 10px 'DM Mono', monospace;
+  color: #b4a995;
+  padding: 6px 8px;
+  border: 1px solid #ffffff12;
+  border-radius: 3px;
+  background: #ffffff05;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.room-instructions {
+  font-size: 9px;
+  color: #928a7b;
+  margin-bottom: 10px;
+  line-height: 1.4;
+}
+.room-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: #b9a87b;
+}
+.room-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d9a952;
+  box-shadow: 0 0 6px #d9a95255;
+  animation: room-pulse 1.5s ease-in-out infinite;
+}
+@keyframes room-pulse {
+  50% {
+    box-shadow: 0 0 12px #d9a95280;
+    opacity: 0.8;
+  }
+}
+
+.room-join {
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid #a78c5a36;
+  border-radius: 6px;
+  background: #201d16;
+}
+.room-code-input {
+  width: 100%;
+  max-width: 200px;
+  padding: 10px;
+  border: 1px solid #a78c5a;
+  border-radius: 4px;
+  background: #17150f;
+  color: #e3d4af;
+  font: 700 20px 'DM Mono', monospace;
+  letter-spacing: 0.3em;
+  text-align: center;
+  text-transform: uppercase;
+}
+.room-code-input::placeholder {
+  color: #6a6358;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+}
+.join-error {
+  font-size: 9px;
+  color: #ff6655;
+  margin-top: 6px;
+}
+
+@media (max-width: 600px) {
+  .multiplayer-options {
+    grid-template-columns: 1fr;
+  }
+  .multiplayer-options .mode-card {
+    min-height: 64px;
+    padding: 10px;
+  }
+}

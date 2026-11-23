@@ -49,22 +49,86 @@
             ♪ Música ligada</button
           ><button id="new-game-top" class="button button-quiet" type="button">
             <span>↻</span> Nova partida
+          </button><button id="multiplayer-btn" class="button button-quiet" type="button">
+            <span>⇄</span> Multijogador
           </button>
         </div>
       </header>
 
       <main>
-        <section id="setup-screen" class="setup-screen">
+        <section id="multiplayer-screen" class="setup-screen hidden">
           <div class="hero-copy">
             <div class="eyebrow">
-              <span class="eyebrow-line"></span> A FORTUNA SORRI PARA QUEM ARRISCA
+              <span class="eyebrow-line"></span> DOIS LADOS, UM CAMPO DE BATALHA
             </div>
-            <h1>O destino<br /><span>está no tabuleiro.</span></h1>
+            <h1>Sala de<br /><span>partida.</span></h1>
             <p>
-              Peças, poderes e eventos disputam cada casa.<br />Forje sua estratégia e veja o caos
-              tomar forma.
+              Crie uma sala e envie o código ou URL para um amigo.
+              Assim que ambos entrarem, a partida começa automaticamente.
             </p>
           </div>
+          <div class="setup-grid">
+            <div class="setup-main">
+              <div class="section-heading">
+                <div>
+                  <span class="section-number">01</span>
+                  <h2>Modo multijogador</h2>
+                </div>
+                <span class="section-hint">SEM CONTA · SEM REGISTRO</span>
+              </div>
+              <div class="multiplayer-options">
+                <button id="create-room" class="mode-card selected" type="button" data-mode="create">
+                  <span class="mode-top"><span>✦</span><span class="mode-tag">CRIAR</span></span>
+                  <b>Nova sala</b><small>Gera um código e um URL único para compartilhar.</small>
+                </button>
+                <button id="join-room" class="mode-card" type="button" data-mode="join">
+                  <span class="mode-top"><span>⇄</span><span class="mode-tag">ENTRAR</span></span>
+                  <b>Juntar-se a uma sala</b><small>Digite o código de 6 dígitos de outro jogador.</small>
+                </button>
+              </div>
+              <div id="room-creation" class="room-creation hidden">
+                <div class="room-code-display">
+                  <span class="room-code-label">CÓDIGO DA SALA</span>
+                  <span id="room-code" class="room-code">--------</span>
+                  <button id="copy-code" class="button button-quiet" type="button">Copiar</button>
+                </div>
+                <div class="room-url-display">
+                  <span class="room-code-label">LINK DIRETO</span>
+                  <span id="room-url" class="room-url">—</span>
+                  <button id="copy-url" class="button button-quiet" type="button">Copiar</button>
+                </div>
+                <p class="room-instructions">
+                  Envie o código ou o link para seu adversário. Quando ele entrar, a partida começa.
+                </p>
+                <div class="room-status" id="room-status">
+                  <span class="room-status-dot"></span>
+                  <span>Aguardando o segundo jogador...</span>
+                </div>
+              </div>
+              <div id="room-join" class="room-join hidden">
+                <input id="room-code-input" type="text" maxlength="6" placeholder="CÓDIGO DA SALA" class="room-code-input" />
+                <button id="join-submit" class="button button-start" type="button">Entrar na sala</button>
+                <p id="join-error" class="join-error hidden">Sala não encontrada ou já está cheia.</p>
+              </div>
+            </div>
+            <aside class="setup-aside">
+              <div class="aside-stamp">♜</div>
+              <span class="aside-kicker">SEM ADVERSÁRIO PRÉ-INSTALADO</span>
+              <h3>Dois jogadores.<br /><em>Um tabuleiro.</em></h3>
+              <p>
+                Cada jogador controla um lado. O tabuleiro sincroniza em tempo real via WebSocket.
+                Use o código para entrada rápida ou o URL para acesso direto.
+              </p>
+              <div class="aside-rule"></div>
+              <div class="aside-stat"><span>JOGADORES</span><b>2 <i>·</i> online</b></div>
+              <div class="aside-stat"><span>REGRAS BASE</span><b>chess.js</b></div>
+              <div class="aside-stat"><span>SEU OBJETIVO</span><b>Xeque-mate.</b></div>
+              <button id="back-multiplayer" class="button button-quiet" type="button">
+                ← Voltar
+              </button>
+            </aside>
+          </div>
+        </section>
           <div class="setup-grid">
             <div class="setup-main">
               <div class="section-heading">

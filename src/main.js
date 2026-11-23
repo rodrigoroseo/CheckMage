@@ -144,6 +144,16 @@ const allCards = [
   'counterspell',
   'sacrifice',
 ];
+// Configuração multiplayer
+const MP = {
+  room: null,
+  code: null,
+  player: null,
+  ws: null,
+  connected: false,
+  opponentJoined: false,
+  lastMoveTime: 0,
+};
 const state = {
   game: null,
   opts: null,
@@ -194,6 +204,14 @@ const state = {
   suppressDragClick: false,
   promotionPending: null,
   classDraft: null,
+  multiplayer: {
+    room: null,
+    code: null,
+    player: null,
+    ws: null,
+    connected: false,
+    opponentJoined: false,
+  },
 };
 let audioContext = null,
   soundEnabled = true,
@@ -2197,6 +2215,7 @@ function makeMove(from, to, move, promotion = 'q', freeAction = false) {
   state.cardsUsed[state.game.turn()] = false;
   state.powerUsed[state.game.turn()] = false;
   state.sacrificeUsed[state.game.turn()] = false;
+  if (MP.ws && MP.connected && !freeAction) mpSendMove(from, to, promotion);
   render();
   checkEnd();
   return true;
@@ -3693,6 +3712,205 @@ function toast(msg) {
   document.body.append(t);
   setTimeout(() => t.remove(), 2600);
 }
+
+// === Multiplayer ===
+function mpProtocol() {
+  return location.protocol === 'https:' ? 'wss:' : 'ws:';
+}
+function mpConnect(code) {
+  if (MP.ws) MP.ws.close();
+  MP.code = code;
+  const wsUrl = `${mpProtocol()}//${location.host}/ws?code=${encodeURIComponent(code)}`;
+  const ws = new WebSocket(wsUrl);
+  MP.ws = ws;
+  ws.onopen = () => {
+    MP.connected = true;
+    console.log('[MP] Conectado à sala', code);
+  };
+  ws.onmessage = (ev) => {
+    try {
+      const msg = JSON.parse(ev.data);
+      mpHandleMessage(msg);
+    } catch (e) {
+      console.error('[MP] Mensagem inválida', e);
+    }
+  };
+  ws.onclose = () => {
+    MP.connected = false;
+    if (!MP.opponentJoined) toast('Conexão encerrada. Tente novamente.');
+  };
+  ws.onerror = (err) => {
+    console.error('[MP] Erro WebSocket', err);
+    toast('Erro de conexão com a sala.');
+  };
+}
+function mpHandleMessage(msg) {
+  switch (msg.type) {
+    case 'joined':
+      MP.player = msg.player;
+      MP.opponentJoined = msg.players >= 2;
+      if (MP.opponentJoined) {
+        toast('Adversário entrou. Partida começando!');
+        $('#room-status').innerHTML = '<span class="room-status-dot"></span><span>Adversário conectado!</span>';
+        setTimeout(() => startMultiplayerGame(msg.fen), 1200);
+      } else {
+        $('#room-status').innerHTML = '<span class="room-status-dot"></span><span>Você é o Jogador 1. Aguardando adversário...</span>';
+      }
+      break;
+    case 'start':
+      MP.opponentJoined = true;
+      toast('Partida começou!');
+      startMultiplayerGame(msg.fen);
+      break;
+    case 'move':
+      applyRemoteMove(msg.from, msg.to, msg.promotion);
+      break;
+    case 'resign':
+      toast(`Jogador ${msg.player} resignou.`);
+      break;
+    case 'opponentLeft':
+      toast('Adversário saiu da sala.');
+      break;
+    case 'error':
+      toast(msg.message || 'Erro na sala.');
+      break;
+  }
+}
+function mpSendMove(from, to, promotion) {
+  if (!MP.ws || MP.ws.readyState !== 1) return;
+  MP.ws.send(JSON.stringify({ type: 'move', from, to, promotion }));
+}
+function mpSendResign() {
+  if (!MP.ws || MP.ws.readyState !== 1) return;
+  MP.ws.send(JSON.stringify({ type: 'resign' }));
+}
+function startMultiplayerGame(fen) {
+  state.game = new Chess();
+  if (fen) state.game.load(fen);
+  state.opts = chosenSetup();
+  state.opts.mode = 'classic';
+  state.selected = null;
+  state.legal = [];
+  state.moves = [];
+  state.snapshots = [];
+  state.lastMove = null;
+  state.round = 1;
+  state.eventPly = 0;
+  state.eventType = null;
+  state.eventForecast = null;
+  state.eventHighlights = [];
+  state.activity = [];
+  state.logView = 'moves';
+  state.holes = [];
+  state.portals = [];
+  state.mines = [];
+  state.shields = [];
+  state.bombs = [];
+  state.stunned = [];
+  state.scheduledBishops = [];
+  state.grimoirePicker = null;
+  state.hands = { w: [], b: [] };
+  state.dead = { w: [], b: [] };
+  state.captureRewards = { w: [], b: [] };
+  state.roundDeltas = [];
+  state.roundMaterialBaseline = 0;
+  state.sacrificeUsed = { w: false, b: false };
+  state.cardsUsed = { w: false, b: false };
+  state.handSide = 'w';
+  state.pendingCard = null;
+  state.counterspellPending = null;
+  state.mateResponseOffered = false;
+  state.classes = { w: null, b: null };
+  state.classPower = { w: { charges: 0, cooldown: 0 }, b: { charges: 0, cooldown: 0 } };
+  state.powerUsed = { w: false, b: false };
+  state.enabledClasses = state.opts.enabledClasses;
+  state.enabledCards = state.opts.enabledCards;
+  state.classRandom = state.opts.randomClasses;
+  state.furySide = null;
+  state.knightElephant = null;
+  state.towerRam = null;
+  state.roulette = null;
+  state.ended = false;
+  state.promotionPending = null;
+  state.motion = null;
+  state.classDraft = null;
+  $('#multiplayer-screen').classList.add('hidden');
+  $('#setup-screen').classList.add('hidden');
+  $('#game-screen').classList.remove('hidden');
+  $('#mode-label').textContent = 'MULTIJOGADOR';
+  $('.game-heading .eyebrow').innerHTML = '<span class="live-dot"></span> PARTIDA MULTIJOGADOR';
+  $('.game-heading h1').innerHTML = 'Sala <span>' + MP.code + '</span>';
+  $('#hands-panel').classList.add('hidden');
+  startAmbient('game');
+  render();
+}
+function showMultiplayer() {
+  $('#setup-screen').classList.add('hidden');
+  $('#game-screen').classList.add('hidden');
+  $('#multiplayer-screen').classList.remove('hidden');
+  startAmbient('setup');
+}
+function showSetupFromMultiplayer() {
+  if (MP.ws) MP.ws.close();
+  MP.ws = null;
+  MP.connected = false;
+  MP.opponentJoined = false;
+  $('#multiplayer-screen').classList.add('hidden');
+  $('#setup-screen').classList.remove('hidden');
+  startAmbient('setup');
+}
+function createRoom() {
+  fetch('/api/rooms', { method: 'POST' })
+    .then((r) => r.json())
+    .then((data) => {
+      MP.room = data;
+      $('#room-creation').classList.remove('hidden');
+      $('#room-code').textContent = data.code;
+      $('#room-url').textContent = data.url;
+      $('#room-join').classList.add('hidden');
+      mpConnect(data.code);
+    })
+    .catch(() => toast('Erro ao criar sala. Tente novamente.'));
+}
+function joinRoom(code) {
+  fetch(`/api/rooms/${encodeURIComponent(code)}`)
+    .then((r) => {
+      if (!r.ok) throw new Error('Sala não encontrada');
+      return r.json();
+    })
+    .then((data) => {
+      MP.room = data;
+      $('#room-creation').classList.add('hidden');
+      $('#room-join').classList.add('hidden');
+      $('#multiplayer-screen .hero-copy h1').innerHTML = `Sala <span>${code}</span>`;
+      $('#multiplayer-screen .hero-copy p').textContent = 'Conectando ao adversário...';
+      mpConnect(code);
+    })
+    .catch(() => {
+      $('#join-error').classList.remove('hidden');
+    });
+}
+function copyToClipboard(text) {
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(() => toast('Copiado!')).catch(() => {});
+  } else {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.append(ta);
+    ta.select();
+    try { document.execCommand('copy'); toast('Copiado!'); } catch {}
+    ta.remove();
+  }
+}
+function applyRemoteMove(from, to, promotion) {
+  const move = state.game.move({ from, to, promotion: promotion || 'q' });
+  if (move) {
+    state.moves.push(move);
+    state.lastMove = { from, to };
+    render();
+  }
+}
+
 function setGameFromBoard(fen) {
   try {
     state.game.load(fen);
@@ -3868,3 +4086,37 @@ document.addEventListener('pointermove', movePointerDrag, { passive: false });
 document.addEventListener('pointerup', finishPointerDrag);
 document.addEventListener('pointercancel', cancelPointerDrag);
 document.addEventListener('keydown', keyHandler);
+
+// === Inicialização multiplayer ===
+function initMultiplayer() {
+  $('#multiplayer-btn').addEventListener('click', showMultiplayer);
+  $('#create-room').addEventListener('click', createRoom);
+  $('#join-room').addEventListener('click', () => {
+    $('#room-creation').classList.add('hidden');
+    $('#room-join').classList.remove('hidden');
+    $('#join-error').classList.add('hidden');
+  });
+  $('#copy-code').addEventListener('click', () => copyToClipboard($('#room-code').textContent));
+  $('#copy-url').addEventListener('click', () => copyToClipboard($('#room-url').textContent));
+  $('#join-submit').addEventListener('click', () => {
+    const code = $('#room-code-input').value.trim().toUpperCase();
+    if (code.length !== 6) {
+      $('#join-error').textContent = 'Código deve ter 6 dígitos.';
+      $('#join-error').classList.remove('hidden');
+      return;
+    }
+    $('#join-error').classList.add('hidden');
+    joinRoom(code);
+  });
+  $('#back-multiplayer').addEventListener('click', showSetupFromMultiplayer);
+
+  // Rota /room/:CODE
+  const path = location.pathname;
+  const m = path.match(/^\/room\/([A-Z0-9]{6})$/i);
+  if (m) {
+    const code = m[1].toUpperCase();
+    showMultiplayer();
+    setTimeout(() => joinRoom(code), 300);
+  }
+}
+initMultiplayer();
