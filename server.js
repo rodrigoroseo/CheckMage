@@ -100,8 +100,8 @@ wss.on('connection', (ws, req) => {
       room.lastActivity = Date.now();
 
       if (msg.type === 'move') {
-        // Relay de movimento para o outro jogador
-        broadcast(room, { type: 'move', from: msg.from, to: msg.to, promotion: msg.promotion }, ws);
+        // Relay de movimento para o outro jogador (inclui FEN para sincronizar)
+        broadcast(room, { type: 'move', from: msg.from, to: msg.to, promotion: msg.promotion, fen: msg.fen }, ws);
         room.turn = room.turn === 'w' ? 'b' : 'w';
       } else if (msg.type === 'classPick') {
         // Guarda a escolha de classe e repassa para o outro jogador

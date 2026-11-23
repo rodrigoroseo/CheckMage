@@ -2208,10 +2208,18 @@ function makeMove(from, to, move, promotion = 'q', freeAction = false) {
     checkEnd();
     return true;
   }
+  postMoveCleanup(side, captured);
+  state.lastMove = { from, to };
+  if (MP.ws && MP.connected) mpSendMove(from, to, promotion, state.game.fen());
+  render();
+  checkEnd();
+  return true;
+}
+function postMoveCleanup(side, captured) {
   if (state.furySide === side) state.furySide = null;
   if (state.knightElephant === side) state.knightElephant = null;
   if (state.towerRam === side) state.towerRam = null;
-  ageBombs(side, captured ? to : null);
+  ageBombs(side, captured ? null : null);
   ageShields(side);
   state.stunned = state.stunned.filter((x) => x.color !== side);
   state.eventHighlights = [];
@@ -2242,10 +2250,6 @@ function makeMove(from, to, move, promotion = 'q', freeAction = false) {
   state.cardsUsed[state.game.turn()] = false;
   state.powerUsed[state.game.turn()] = false;
   state.sacrificeUsed[state.game.turn()] = false;
-  if (MP.ws && MP.connected && !freeAction) mpSendMove(from, to, promotion);
-  render();
-  checkEnd();
-  return true;
 }
 function onCapture(side, sq, type) {
   if (type === 'k') {
@@ -3797,7 +3801,7 @@ function mpHandleMessage(msg) {
       startMultiplayerGame(msg.fen, msg.opts);
       break;
     case 'move':
-      applyRemoteMove(msg.from, msg.to, msg.promotion);
+      applyRemoteMove(msg.from, msg.to, msg.promotion, msg.fen);
       break;
     case 'resign':
       toast(`Jogador ${msg.player} resignou.`);
@@ -3819,9 +3823,9 @@ function mpHandleMessage(msg) {
       break;
   }
 }
-function mpSendMove(from, to, promotion) {
+function mpSendMove(from, to, promotion, fen) {
   if (!MP.ws || MP.ws.readyState !== 1) return;
-  MP.ws.send(JSON.stringify({ type: 'move', from, to, promotion }));
+  MP.ws.send(JSON.stringify({ type: 'move', from, to, promotion, fen }));
 }
 function mpSendResign() {
   if (!MP.ws || MP.ws.readyState !== 1) return;
@@ -3960,13 +3964,20 @@ function copyToClipboard(text) {
     ta.remove();
   }
 }
-function applyRemoteMove(from, to, promotion) {
-  const move = state.game.move({ from, to, promotion: promotion || 'q' });
-  if (move) {
+function applyRemoteMove(from, to, promotion, fen) {
+  if (fen) {
+    try { state.game.load(fen); } catch {}
+    const movedSide = state.game.turn() === 'w' ? 'b' : 'w';
+    postMoveCleanup(movedSide, false);
+  } else {
+    const side = state.game.turn();
+    const move = state.game.move({ from, to, promotion: promotion || 'q' });
+    if (!move) return;
     state.moves.push(move);
-    state.lastMove = { from, to };
-    render();
+    postMoveCleanup(side, false);
   }
+  state.lastMove = { from, to };
+  render();
 }
 
 function setGameFromBoard(fen) {
