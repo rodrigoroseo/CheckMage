@@ -4485,6 +4485,390 @@ body {
   margin-top: 6px;
 }
 
+/* Multiplayer config section */
+.multiplayer-config {
+  margin-top: 20px;
+  padding: 20px;
+  border: 1px solid #a78c5a36;
+  border-radius: 8px;
+  background: #201d16;
+}
+.multiplayer-config .section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #ffffff10;
+}
+.multiplayer-config .section-heading .section-number {
+  font: 8px 'DM Mono', monospace;
+  color: #a49b88;
+  letter-spacing: 0.1em;
+}
+.multiplayer-config .section-heading h2 {
+  font: 700 16px 'Space Grotesk', sans-serif;
+  color: #e3d4af;
+  margin: 0;
+}
+.multiplayer-config .section-heading .section-hint {
+  font: 8px 'DM Mono', monospace;
+  color: #a49b88;
+  letter-spacing: 0.1em;
+  padding: 3px 6px;
+  border-radius: 3px;
+  background: #d9a95210;
+  border: 1px solid #d9a95220;
+}
+.multiplayer-config .mechanic-group {
+  margin-bottom: 16px;
+}
+.multiplayer-config .mechanic-group:last-child {
+  margin-bottom: 0;
+}
+.multiplayer-config .group-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.multiplayer-config .group-label .group-icon {
+  font-size: 16px;
+  color: #d9a952;
+}
+.multiplayer-config .group-label h3 {
+  font: 700 12px 'Space Grotesk', sans-serif;
+  color: #e3d4af;
+  margin: 0;
+}
+.multiplayer-config .group-label p {
+  font-size: 9px;
+  color: #a49b88;
+  margin: 0;
+}
+.multiplayer-config .option-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+.multiplayer-config .option-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid #ffffff10;
+  border-radius: 4px;
+  background: #ffffff05;
+  cursor: pointer;
+}
+.multiplayer-config .option-card:hover {
+  border-color: #d9a95240;
+  background: #d9a95210;
+}
+.multiplayer-config .option-card input[type='checkbox'] {
+  position: absolute;
+  opacity: 0;
+}
+.multiplayer-config .option-check {
+  width: 14px;
+  height: 14px;
+  border: 1px solid #a78c5a;
+  border-radius: 3px;
+  background: #17150f;
+  position: relative;
+  flex-shrink: 0;
+}
+.multiplayer-config .option-card input[type='checkbox']:checked + .option-check {
+  background: #d9a952;
+  border-color: #d9a952;
+}
+.multiplayer-config .option-card input[type='checkbox']:checked + .option-check::after {
+  content: '✓';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font: 700 10px 'DM Mono', monospace;
+  color: #17150f;
+}
+.multiplayer-config .option-symbol {
+  font-size: 16px;
+  color: #d9a952;
+  flex-shrink: 0;
+}
+.multiplayer-config .option-symbol.purple {
+  color: #b895ff;
+}
+.multiplayer-config .option-symbol.amber {
+  color: #d9a952;
+}
+.multiplayer-config .option-text {
+  font: 8px 'DM Mono', monospace;
+  color: #a49b88;
+  letter-spacing: 0.05em;
+}
+.multiplayer-config .option-text b {
+  display: block;
+  font: 700 10px 'Space Grotesk', sans-serif;
+  color: #e3d4af;
+  margin-bottom: 2px;
+}
+.multiplayer-config .option-text small {
+  display: block;
+  font-size: 8px;
+  color: #a49b88;
+}
+.multiplayer-config .card-preview-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0;
+  padding: 8px;
+  border-radius: 4px;
+  background: #ffffff05;
+  border: 1px solid #ffffff10;
+}
+.multiplayer-config .mini-card {
+  font-size: 14px;
+  color: #d9a952;
+}
+.multiplayer-config .card-preview-note {
+  font: 8px 'DM Mono', monospace;
+  color: #a49b88;
+}
+.multiplayer-config .mechanic-subtoggles {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0;
+}
+.multiplayer-config .mechanic-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font: 8px 'DM Mono', monospace;
+  color: #a49b88;
+}
+.multiplayer-config .mechanic-toggle input[type='checkbox'] {
+  display: none;
+}
+.multiplayer-config .toggle-track {
+  width: 30px;
+  height: 16px;
+  border-radius: 8px;
+  background: #a78c5a30;
+  border: 1px solid #a78c5a50;
+  position: relative;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.multiplayer-config .mechanic-toggle input[type='checkbox']:checked + .toggle-track {
+  background: #d9a952;
+  border-color: #d9a952;
+}
+.multiplayer-config .toggle-track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #a49b88;
+  transition: transform 0.2s;
+}
+.multiplayer-config .mechanic-toggle input[type='checkbox']:checked + .toggle-track::after {
+  transform: translateX(14px);
+  background: #17150f;
+}
+.multiplayer-config .card-icons {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin: 10px 0;
+}
+.multiplayer-config .card-icons .card-icon-toggle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid #ffffff10;
+  border-radius: 4px;
+  background: #ffffff05;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.multiplayer-config .card-icons .card-icon-toggle:hover {
+  border-color: #d9a95240;
+  background: #d9a95210;
+}
+.multiplayer-config .card-icons .card-icon-toggle.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.multiplayer-config .card-icons .card-icon-toggle span {
+  font-size: 14px;
+  color: #d9a952;
+}
+.multiplayer-config .card-icons .card-icon-toggle small {
+  font: 7px 'DM Mono', monospace;
+  color: #a49b88;
+  text-align: center;
+  line-height: 1.2;
+}
+.multiplayer-config .class-toggle-inline {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 4px;
+  background: #ffffff05;
+  border: 1px solid #ffffff10;
+}
+.multiplayer-config .class-toggle-inline span:last-child {
+  font: 8px 'DM Mono', monospace;
+  color: #a49b88;
+  margin-left: auto;
+}
+.multiplayer-config .class-toggle-inline b {
+  display: block;
+  font: 700 10px 'Space Grotesk', sans-serif;
+  color: #e3d4af;
+  margin-bottom: 2px;
+}
+.multiplayer-config .class-toggle-inline small {
+  display: block;
+  font-size: 8px;
+  color: #a49b88;
+}
+.multiplayer-config .class-config {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 4px;
+  background: #ffffff05;
+  border: 1px solid #ffffff10;
+}
+.multiplayer-config .class-icons-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.multiplayer-config .class-icons {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  flex: 1;
+}
+.multiplayer-config .class-icons .class-icon-toggle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid #ffffff10;
+  border-radius: 3px;
+  background: #ffffff05;
+  cursor: pointer;
+}
+.multiplayer-config .class-icons .class-icon-toggle:hover {
+  border-color: #d9a95240;
+}
+.multiplayer-config .class-icons .class-icon-toggle.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.multiplayer-config .class-icons .class-icon-toggle span {
+  font: 700 10px 'Space Grotesk', sans-serif;
+  color: #e3d4af;
+  text-align: center;
+}
+.multiplayer-config .random-class {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font: 8px 'DM Mono', monospace;
+  color: #a49b88;
+}
+.multiplayer-config .random-class b {
+  font: 700 9px 'Space Grotesk', sans-serif;
+  color: #e3d4af;
+}
+.multiplayer-config .random-class small {
+  font-size: 7px;
+  color: #a49b88;
+}
+.multiplayer-config .class-selection-note {
+  font: 7px 'DM Mono', monospace;
+  color: #928a7b;
+  margin-top: 8px;
+  padding: 6px;
+  border-radius: 3px;
+  background: #d9a95210;
+  border: 1px solid #d9a95220;
+}
+.multiplayer-config .mode-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.multiplayer-config .mode-grid .mode-card {
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  border: 1px solid #ffffff10;
+  border-radius: 4px;
+  background: #ffffff05;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s;
+}
+.multiplayer-config .mode-grid .mode-card:hover {
+  border-color: #d9a95240;
+  background: #d9a95210;
+}
+.multiplayer-config .mode-grid .mode-card.selected {
+  border-color: #d9a952;
+  background: #d9a95220;
+  box-shadow: 0 0 10px #d9a95220;
+}
+.multiplayer-config .mode-grid .mode-card .mode-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.multiplayer-config .mode-grid .mode-card .mode-top span {
+  font-size: 14px;
+  color: #d9a952;
+}
+.multiplayer-config .mode-grid .mode-card .mode-tag {
+  font: 6px 'DM Mono', monospace;
+  color: #a49b88;
+  padding: 1px 3px;
+  border-radius: 2px;
+  background: #d9a95210;
+}
+.multiplayer-config .mode-grid .mode-card b {
+  font: 700 9px 'Space Grotesk', sans-serif;
+  color: #e3d4af;
+  margin-bottom: 2px;
+}
+.multiplayer-config .mode-grid .mode-card small {
+  font: 7px 'DM Mono', monospace;
+  color: #a49b88;
+  line-height: 1.3;
+}
+.multiplayer-config .mp-config-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #ffffff10;
+}
+
 @media (max-width: 600px) {
   .multiplayer-options {
     grid-template-columns: 1fr;
@@ -4492,5 +4876,13 @@ body {
   .multiplayer-options .mode-card {
     min-height: 64px;
     padding: 10px;
+  }
+  .multiplayer-config .option-grid,
+  .multiplayer-config .mode-grid,
+  .multiplayer-config .card-icons {
+    grid-template-columns: 1fr;
+  }
+  .multiplayer-config .class-icons {
+    grid-template-columns: repeat(4, 1fr);
   }
 }

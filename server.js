@@ -33,13 +33,15 @@ function broadcast(room, msg, skipWs = null) {
 }
 
 // Servir frontend estático
+app.use(express.json());
 app.use(express.static(join(__dirname, 'dist')));
 
 // Criar nova sala
 app.post('/api/rooms', (req, res) => {
   const code = generateCode();
-  rooms.set(code, { players: [], turn: 'w', history: [], fen: null, started: false });
-  res.json({ code, url: `${HOST}/room/${code}` });
+  const room = { players: [], turn: 'w', history: [], fen: null, started: false, opts: req.body };
+  rooms.set(code, room);
+  res.json({ code, url: `${HOST}/room/${code}`, opts: req.body });
 });
 
 // Verificar se sala existe (para entrada por código)
@@ -83,7 +85,7 @@ wss.on('connection', (ws, req) => {
 
   if (room.players.length === 2) {
     room.started = true;
-    broadcast(room, { type: 'start', fen: room.fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1' });
+    broadcast(room, { type: 'start', fen: room.fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', opts: room.opts });
   }
 
   ws.on('message', (data) => {

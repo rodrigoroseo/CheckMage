@@ -79,12 +79,221 @@
               <div class="multiplayer-options">
                 <button id="create-room" class="mode-card selected" type="button" data-mode="create">
                   <span class="mode-top"><span>✦</span><span class="mode-tag">CRIAR</span></span>
-                  <b>Nova sala</b><small>Gera um código e um URL único para compartilhar.</small>
+                  <b>Nova sala</b><small>Configure as regras e crie a sala para compartilhar.</small>
                 </button>
                 <button id="join-room" class="mode-card" type="button" data-mode="join">
                   <span class="mode-top"><span>⇄</span><span class="mode-tag">ENTRAR</span></span>
                   <b>Juntar-se a uma sala</b><small>Digite o código de 6 dígitos de outro jogador.</small>
                 </button>
+              </div>
+              <div id="multiplayer-config" class="multiplayer-config hidden">
+                <div class="section-heading">
+                  <div>
+                    <span class="section-number">02</span>
+                    <h2>Configure as regras</h2>
+                  </div>
+                  <span class="section-hint">ESCOLHA AS OPÇÕES DA PARTIDA</span>
+                </div>
+                <div class="mechanic-group">
+                  <div class="group-label">
+                    <span class="group-icon icon-event">✳</span>
+                    <div>
+                      <h3>Eventos de tabuleiro</h3>
+                      <button
+                        class="help-tip"
+                        type="button"
+                        aria-label="Sobre eventos de tabuleiro"
+                        title="Eventos ambientais mudam o tabuleiro a cada cinco rodadas completas. Selecione quais podem acontecer."
+                      >
+                        ?
+                      </button>
+                      <p>O mundo muda a cada 5 rodadas completas.</p>
+                    </div>
+                    <label class="switch"
+                      ><input id="mp-toggle-events" type="checkbox" checked /><span></span
+                    ></label>
+                  </div>
+                  <div id="mp-events-options" class="option-grid">
+                    <label class="option-card"
+                      ><input
+                        type="checkbox"
+                        name="mp-event"
+                        value="quake"
+                        title="Duas casas vazias do centro viram abismos até o próximo evento."
+                        checked
+                      /><span class="option-check"></span><span class="option-symbol">▦</span
+                      ><span class="option-text"
+                        ><b>Terremoto</b><small>Casas viram abismos.</small></span
+                      ></label
+                    >
+                    <label class="option-card"
+                      ><input
+                        type="checkbox"
+                        name="mp-event"
+                        value="portal"
+                        title="Pousar em um portal transporta a peça para o outro."
+                        checked
+                      /><span class="option-check"></span><span class="option-symbol purple">◉</span
+                      ><span class="option-text"
+                        ><b>Portal dimensional</b><small>Uma viagem inesperada.</small></span
+                      ></label
+                    >
+                    <label class="option-card"
+                      ><input
+                        type="checkbox"
+                        name="mp-event"
+                        value="swap"
+                        title="Peças comuns de cada lado trocam de posição sem colocar reis em xeque."
+                        checked
+                      /><span class="option-check"></span><span class="option-symbol amber">⇄</span
+                      ><span class="option-text"
+                        ><b>Troca de identidade</b><small>Aliados trocam de lugar.</small></span
+                      ></label
+                    >
+                    <label class="option-card"
+                      ><input
+                        type="checkbox"
+                        name="mp-event"
+                        value="mines"
+                        title="Quatro minas invisíveis aparecem no centro e eliminam a primeira peça vulnerável que pisar nelas."
+                      /><span class="option-check"></span><span class="option-symbol amber">⚠</span
+                      ><span class="option-text"
+                        ><b>Campo minado</b><small>Quatro minas invisíveis.</small></span
+                      ></label
+                    >
+                  </div>
+                </div>
+                <div class="mechanic-group">
+                  <div class="group-label">
+                    <span class="group-icon icon-card">▤</span>
+                    <div>
+                      <h3>Cartas & poderes</h3>
+                      <button
+                        class="help-tip"
+                        type="button"
+                        aria-label="Sobre cartas e poderes"
+                        title="Cada lado começa com três cartas aleatórias. Uma carta normal pode ser usada por turno; capturas de peças maiores podem render novas cartas."
+                      >
+                        ?
+                      </button>
+                      <p>3 cartas iniciais; capturas rendem mais. Limite de 1 por turno.</p>
+                    </div>
+                    <label class="switch"
+                      ><input id="mp-toggle-cards" type="checkbox" checked /><span></span
+                    ></label>
+                  </div>
+                  <div class="card-preview-row">
+                    <span class="mini-card">✦</span><span class="mini-card">◈</span
+                    ><span class="mini-card">↯</span
+                    ><span class="card-preview-note"
+                      >Traição, escudo, ressurreição e muito mais.</span
+                    >
+                  </div>
+                  <div class="mechanic-subtoggles">
+                    <label class="mechanic-toggle"
+                      ><input id="mp-toggle-individual-cards" type="checkbox" checked /><span
+                        class="toggle-track"
+                      ></span
+                      ><span><b>Cartas</b><small>Decks e cartas de captura</small></span></label
+                    >
+                  </div>
+                  <div id="mp-card-icons" class="card-icons" aria-label="Cartas permitidas"></div>
+                  <label class="mechanic-toggle class-toggle-inline">
+                    <input id="mp-toggle-classes" type="checkbox" checked />
+                    <span class="toggle-track"></span>
+                    <span>
+                      <b>Classes & poderes</b>
+                      <small>Uma habilidade por lado</small>
+                    </span>
+                  </label>
+                  <div id="mp-classes-options" class="class-config">
+                    <div class="class-icons-row">
+                      <div id="mp-class-icons" class="class-icons" aria-label="Classes permitidas"></div>
+                      <label class="random-class">
+                        <input id="mp-random-classes" type="checkbox" />
+                        <span class="toggle-track"></span>
+                        <span>
+                          <b>Sortear classes</b>
+                          <small>Definidas aleatoriamente no início</small>
+                        </span>
+                      </label>
+                    </div>
+                    <div class="class-selection-note">
+                      Desativado: os dois lados escolhem antes da partida.
+                    </div>
+                  </div>
+                </div>
+                <div class="mechanic-group last-group">
+                  <div class="group-label">
+                    <span class="group-icon icon-mode">⌘</span>
+                    <div>
+                      <h3>Modos de jogo</h3>
+                      <button
+                        class="help-tip"
+                        type="button"
+                        aria-label="Sobre modos de regras"
+                        title="Escolha uma variante de jogo."
+                      >
+                        ?
+                      </button>
+                      <p>Escolha uma variante para a partida multijogador.</p>
+                    </div>
+                  </div>
+                  <div class="mode-grid">
+                    <button
+                      class="mode-card selected"
+                      type="button"
+                      data-mode="classic"
+                      title="Xadrez base com cartas e eventos ambientais ativados conforme as opções."
+                      aria-pressed="true"
+                    >
+                      <span class="mode-top"><span>♟</span><span class="mode-tag">PADRÃO</span></span
+                      ><b>Caos clássico</b><small>O xadrez com suas mecânicas extras.</small>
+                    </button>
+                    <button
+                      class="mode-card"
+                      type="button"
+                      data-mode="roulette"
+                      title="Antes de cada lance, uma roleta exige um tipo de peça; sem lance disponível, a vez é perdida."
+                      aria-pressed="false"
+                    >
+                      <span class="mode-top"
+                        ><span>◉</span><span class="mode-tag">ALEATÓRIO</span></span
+                      ><b>Roleta russa</b><small>A roleta decide qual peça mover.</small>
+                    </button>
+                    <button
+                      class="mode-card"
+                      type="button"
+                      data-mode="evolution"
+                      title="Uma peça que captura evolui para a próxima categoria, até Rainha."
+                      aria-pressed="false"
+                    >
+                      <span class="mode-top"
+                        ><span>↑</span><span class="mode-tag">EVOLUÇÃO</span></span
+                      ><b>Evolução</b><small>Peças capturadoras ficam mais fortes.</small>
+                    </button>
+                    <button
+                      class="mode-card"
+                      type="button"
+                      data-mode="fog"
+                      title="Cada jogador vê as casas alcançadas pelas próprias peças e as peças visíveis à sua volta."
+                      aria-pressed="false"
+                    >
+                      <span class="mode-top"
+                        ><span>◌</span><span class="mode-tag">VISÃO LIMITADA</span></span
+                      ><b>Névoa de guerra</b
+                      ><small>Veja apenas as casas alcançadas pelas suas peças.</small>
+                    </button>
+                  </div>
+                </div>
+                <div class="mp-config-actions">
+                  <button id="mp-create-confirm" class="button button-start" type="button">
+                    Criar sala <span>↗</span>
+                  </button>
+                  <button id="mp-create-cancel" class="button button-quiet" type="button">
+                    Voltar
+                  </button>
+                </div>
               </div>
               <div id="room-creation" class="room-creation hidden">
                 <div class="room-code-display">

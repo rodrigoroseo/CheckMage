@@ -3752,7 +3752,7 @@ function mpHandleMessage(msg) {
       if (MP.opponentJoined) {
         toast('Adversário entrou. Partida começando!');
         $('#room-status').innerHTML = '<span class="room-status-dot"></span><span>Adversário conectado!</span>';
-        setTimeout(() => startMultiplayerGame(msg.fen), 1200);
+        setTimeout(() => startMultiplayerGame(msg.fen, msg.opts), 1200);
       } else {
         $('#room-status').innerHTML = '<span class="room-status-dot"></span><span>Você é o Jogador 1. Aguardando adversário...</span>';
       }
@@ -3760,7 +3760,7 @@ function mpHandleMessage(msg) {
     case 'start':
       MP.opponentJoined = true;
       toast('Partida começou!');
-      startMultiplayerGame(msg.fen);
+      startMultiplayerGame(msg.fen, msg.opts);
       break;
     case 'move':
       applyRemoteMove(msg.from, msg.to, msg.promotion);
@@ -3784,10 +3784,10 @@ function mpSendResign() {
   if (!MP.ws || MP.ws.readyState !== 1) return;
   MP.ws.send(JSON.stringify({ type: 'resign' }));
 }
-function startMultiplayerGame(fen) {
+function startMultiplayerGame(fen, opts) {
   state.game = new Chess();
   if (fen) state.game.load(fen);
-  state.opts = chosenSetup();
+  state.opts = opts || chosenMPSetup();
   state.opts.mode = 'classic';
   state.selected = null;
   state.legal = [];
@@ -3962,6 +3962,54 @@ $$('.class-icon-toggle').forEach((button) =>
     button.classList.toggle('disabled', active);
   }),
 );
+
+// MP config: popule cards e classes
+$('#mp-card-icons').innerHTML = allCards
+  .map(
+    (id) =>
+      '<button type="button" class="card-icon-toggle" data-card="' +
+      id +
+      '" aria-pressed="true" title="' +
+      cardInfo[id].name +
+      ': ' +
+      cardInfo[id].desc +
+      '"><span>' +
+      cardInfo[id].icon +
+      '</span><small>' +
+      cardInfo[id].name.split(' · ')[0] +
+      '</small></button>',
+  )
+  .join('');
+$$('#mp-card-icons .card-icon-toggle').forEach((button) =>
+  button.addEventListener('click', () => {
+    const on = button.getAttribute('aria-pressed') === 'true';
+    button.setAttribute('aria-pressed', String(!on));
+    button.classList.toggle('disabled', on);
+  }),
+);
+$('#mp-class-icons').innerHTML = Object.entries(classInfo)
+  .map(
+    ([id, c]) =>
+      '<button type="button" class="class-icon-toggle" data-class="' +
+      id +
+      '" aria-pressed="true" title="' +
+      c.name +
+      ': ' +
+      c.description +
+      '">' +
+      c.icon +
+      '<span>' +
+      c.name +
+      '</span></button>',
+  )
+  .join('');
+$$('#mp-class-icons .class-icon-toggle').forEach((button) =>
+  button.addEventListener('click', () => {
+    const active = button.getAttribute('aria-pressed') === 'true';
+    button.setAttribute('aria-pressed', String(!active));
+    button.classList.toggle('disabled', active);
+  }),
+);
 function syncMechanicOptions() {
   const globalOn = $('#toggle-cards').checked,
     cardOn = globalOn && $('#toggle-individual-cards').checked,
@@ -3980,6 +4028,65 @@ $('#toggle-classes').addEventListener('change', syncMechanicOptions);
 $('#toggle-individual-cards').addEventListener('change', syncMechanicOptions);
 $('#toggle-cards').addEventListener('change', syncMechanicOptions);
 syncMechanicOptions();
+
+// MP config: toggles para eventos, cartas, classes e modos
+function syncMPOptions() {
+  const mpGlobalOn = $('#mp-toggle-cards')?.checked;
+  const mpCardOn = mpGlobalOn && $('#mp-toggle-individual-cards')?.checked;
+  const mpClassOn = mpGlobalOn && $('#mp-toggle-classes')?.checked;
+  const mpCardIcons = $('#mp-card-icons');
+  const mpClassesOptions = $('#mp-classes-options');
+  const mpRandomClasses = $('#mp-random-classes');
+  const mpToggleIndividualCards = $('#mp-toggle-individual-cards');
+  const mpToggleClasses = $('#mp-toggle-classes');
+  if (mpCardIcons) mpCardIcons.classList.toggle('disabled-options', !mpCardOn);
+  if (mpClassesOptions) mpClassesOptions.classList.toggle('disabled-options', !mpClassOn);
+  if (mpRandomClasses) mpRandomClasses.disabled = !mpClassOn;
+  if (mpToggleIndividualCards) mpToggleIndividualCards.disabled = !mpGlobalOn;
+  if (mpToggleClasses) mpToggleClasses.disabled = !mpGlobalOn;
+  document.querySelectorAll('#multiplayer-config input[name="mp-event"]').forEach((input) => {
+    const group = input.closest('.mechanic-group');
+    if (group) group.style.opacity = input.checked ? '1' : '0.4';
+  });
+}
+$('#mp-toggle-events').addEventListener('change', (e) => {
+  const group = e.target.closest('.mechanic-group');
+  if (group) group.style.opacity = e.target.checked ? '1' : '0.4';
+});
+$('#mp-toggle-cards').addEventListener('change', syncMPOptions);
+$('#mp-toggle-individual-cards').addEventListener('change', syncMPOptions);
+$('#mp-toggle-classes').addEventListener('change', syncMPOptions);
+$('#mp-random-classes').addEventListener('change', syncMPOptions);
+syncMPOptions();
+
+// MP config: mode-card selection
+$$('#multiplayer-config .mode-card').forEach((card) =>
+  card.addEventListener('click', () => {
+    $$('#multiplayer-config .mode-card').forEach((other) => {
+      const active = other === card;
+      other.classList.toggle('selected', active);
+      other.setAttribute('aria-pressed', String(active));
+    });
+  }),
+);
+
+function chosenMPSetup() {
+  const mpGlobalOn = $('#mp-toggle-cards')?.checked;
+  return {
+    events: $('#mp-toggle-events')?.checked,
+    eventTypes: $$('#multiplayer-config input[name="mp-event"]:checked').map((x) => x.value),
+    cards: mpGlobalOn && $('#mp-toggle-individual-cards')?.checked,
+    classes: mpGlobalOn && $('#mp-toggle-classes')?.checked,
+    randomClasses: $('#mp-random-classes')?.checked,
+    mode: $('#multiplayer-config .mode-card.selected')?.dataset.mode || 'classic',
+    enabledCards: $$('#mp-card-icons .card-icon-toggle')
+      .filter((b) => b.getAttribute('aria-pressed') === 'true')
+      .map((b) => b.dataset.card),
+    enabledClasses: $$('#mp-class-icons .class-icon-toggle')
+      .filter((b) => b.getAttribute('aria-pressed') === 'true')
+      .map((b) => b.dataset.class),
+  };
+}
 function keyHandler(e) {
   if (e.key === 'Escape') {
     if (state.promotionPending) {
@@ -4090,11 +4197,42 @@ document.addEventListener('keydown', keyHandler);
 // === Inicialização multiplayer ===
 function initMultiplayer() {
   $('#multiplayer-btn').addEventListener('click', showMultiplayer);
-  $('#create-room').addEventListener('click', createRoom);
+  $('#create-room').addEventListener('click', () => {
+    // Mostrar as opções de configuração de jogo antes de criar a sala
+    $('#room-creation').classList.add('hidden');
+    $('#room-join').classList.add('hidden');
+    $('#multiplayer-config').classList.remove('hidden');
+  });
   $('#join-room').addEventListener('click', () => {
     $('#room-creation').classList.add('hidden');
     $('#room-join').classList.remove('hidden');
+    $('#multiplayer-config').classList.add('hidden');
     $('#join-error').classList.add('hidden');
+  });
+  $('#mp-create-confirm').addEventListener('click', () => {
+    // Criar a sala com as regras selecionadas
+    const opts = chosenMPSetup();
+    fetch('/api/rooms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(opts),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        MP.room = data;
+        $('#room-creation').classList.remove('hidden');
+        $('#room-code').textContent = data.code;
+        $('#room-url').textContent = data.url;
+        $('#multiplayer-config').classList.add('hidden');
+        $('#room-join').classList.add('hidden');
+        mpConnect(data.code);
+      })
+      .catch(() => toast('Erro ao criar sala. Tente novamente.'));
+  });
+  $('#mp-create-cancel').addEventListener('click', () => {
+    $('#multiplayer-config').classList.add('hidden');
+    $('#room-creation').classList.add('hidden');
+    $('#room-join').classList.add('hidden');
   });
   $('#copy-code').addEventListener('click', () => copyToClipboard($('#room-code').textContent));
   $('#copy-url').addEventListener('click', () => copyToClipboard($('#room-url').textContent));
