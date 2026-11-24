@@ -154,6 +154,8 @@ const MP = {
   connected: false,
   opponentJoined: false,
   lastMoveTime: 0,
+  serverHands: null,
+  serverClasses: null,
 };
 const state = {
   game: null,
@@ -3813,6 +3815,7 @@ function mpHandleMessage(msg) {
       MP.opponentJoined = true;
       MP.side = msg.sides && msg.sides[MP.player - 1] ? msg.sides[MP.player - 1] : MP.side || 'w';
       MP.serverHands = msg.hands || { w: [], b: [] };
+      MP.serverClasses = msg.classes || null;
       toast('Partida começou!');
       startMultiplayerGame(msg.fen, msg.opts);
       if (msg.eventForecast) state.eventForecast = { type: msg.eventForecast.type, squares: [] };
@@ -4069,8 +4072,15 @@ function startMultiplayerGame(fen, opts) {
     render();
     return;
   }
-  if (state.opts.classes && state.enabledClasses.length)
-    state.classes = { w: random(state.enabledClasses), b: random(state.enabledClasses) };
+  if (state.opts.classes && state.enabledClasses.length) {
+    if (state.classRandom && MP.serverClasses) {
+      // Classes randômicas vêm do servidor
+      state.classes = { ...MP.serverClasses };
+    } else {
+      // Classes sorteadas localmente (modo single-player ou fallback)
+      state.classes = { w: random(state.enabledClasses), b: random(state.enabledClasses) };
+    }
+  }
   beginMatch();
 }
 function showMultiplayer() {

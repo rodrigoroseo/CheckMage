@@ -334,7 +334,7 @@ wss.on('connection', (ws, req) => {
     const openingCards = generateOpeningCards(room.opts);
     room.hands = openingCards;
     const initialForecast = randomEventData(room.opts, room.fen);
-    broadcast(room, {
+    let startMsg = {
       type: 'start',
       fen: room.fen,
       turn: room.turn,
@@ -346,7 +346,17 @@ wss.on('connection', (ws, req) => {
       opts: room.opts,
       sides: room.sides,
       hands: room.hands,
-    });
+    };
+    // Se classes randômicas, escolher no servidor e enviar no início
+    if (room.opts?.randomClasses) {
+      const randomClass = pickRandom(room.opts.enabledClasses || []);
+      room.classes = { w: randomClass, b: randomClass };
+      startMsg.classes = room.classes;
+      room.opts.classes = { w: room.classes.w, b: room.classes.b };
+      room.hands = generateOpeningCards(room.opts);
+      startMsg.hands = room.hands;
+    }
+    broadcast(room, startMsg);
   }
 
   ws.on('message', (data) => {
