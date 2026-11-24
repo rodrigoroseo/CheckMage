@@ -537,31 +537,20 @@ room.classPower = { w: { charges: 1, cooldown: 20 }, b: { charges: 1, cooldown: 
           // Remover contramagia da mão do oponente
           room.hands[side] = room.hands[side] ? room.hands[side].filter((c) => c !== 'counterspell') : [];
           room.cardsUsed[side] = true;
-          // Notificar o jogador original que a carta foi cancelada
-          const oppIdx = room.players.indexOf(ws);
-          const otherIdx = oppIdx === 0 ? 1 : 0;
-          const otherWs = room.players[otherIdx];
-          if (otherWs) {
-            otherWs.send(JSON.stringify({ type: 'cardCancelled' }));
-          }
+          // Notificar ambos os jogadores que a carta foi cancelada
+          broadcast(room, { type: 'cardCancelled' });
         } else {
           // Contramagia recusada: consumir a carta/poder original e confirmar
           consumeCardServer(room, pending.playerSide, pending.card, pending.isClassPower);
-          const oppIdx = room.players.indexOf(ws);
-          const otherIdx = oppIdx === 0 ? 1 : 0;
-          const otherWs = room.players[otherIdx];
-          if (otherWs && otherWs.readyState === 1) {
-            otherWs.send(
-              JSON.stringify({
-                type: 'cardConfirmed',
-                card: pending.card,
-                target: pending.target,
-                playerSide: pending.playerSide,
-                isClassPower: pending.isClassPower,
-                powerId: pending.powerId,
-              }),
-            );
-          }
+          // Notificar ambos os jogadores que a carta foi confirmada
+          broadcast(room, {
+            type: 'cardConfirmed',
+            card: pending.card,
+            target: pending.target,
+            playerSide: pending.playerSide,
+            isClassPower: pending.isClassPower,
+            powerId: pending.powerId,
+          });
         }
         room.pendingCard = null;
         broadcast(room, buildStatePayload(room));

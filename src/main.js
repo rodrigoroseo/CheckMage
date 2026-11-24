@@ -3797,7 +3797,7 @@ function mpConnect(code) {
     MP.connected = true;
     console.log('[MP] Conectado à sala', code);
   };
-  ws.onmessage = (ev) => {
+ws.onmessage = (ev) => {
     try {
       const msg = JSON.parse(ev.data);
       mpHandleMessage(msg);
@@ -3952,10 +3952,13 @@ function mpHandleMessage(msg) {
     case 'cardConfirmed':
       // Carta foi confirmada (contramagia não usada ou não disponível)
       state.waitingForCounterspell = false;
-      const hadPending = !!state.pendingCard;
-      if (hadPending && state.pendingCard) {
-        state.pendingCard.serverConsumed = true;
-        cardTarget(msg.target, true);
+      try {
+        if (state.pendingCard) {
+          state.pendingCard.serverConsumed = true;
+          cardTarget(msg.target, true);
+        }
+      } catch (e) {
+        console.error('[MP] Erro ao aplicar carta confirmada:', e);
       }
       state.pendingCard = null;
       state.selected = null;
