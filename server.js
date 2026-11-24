@@ -172,6 +172,20 @@ function tickClassPower(room, side) {
   }
 }
 
+function consumeCardServer(room, side, card, isClassPower) {
+  if (isClassPower) {
+    const p = room.classPower[side];
+    if (p && p.charges > 0) {
+      p.charges = Math.max(0, p.charges - 1);
+      p.cooldown = p.charges < 3 ? 20 : 0;
+    }
+    room.powerUsed[side] = true;
+  } else {
+    if (room.hands[side]) room.hands[side] = room.hands[side].filter((c) => c !== card);
+    if (card !== 'counterspell') room.cardsUsed[side] = true;
+  }
+}
+
 function generateOpeningCards(opts) {
   const sides = ['w', 'b'];
   const cardCount = 3;
@@ -477,34 +491,24 @@ room.classPower = { w: { charges: 1, cooldown: 20 }, b: { charges: 1, cooldown: 
           ws.send(JSON.stringify({ type: 'error', message: 'Dados de carta inválidos' }));
           return;
         }
+        // Validar posse ANTES de guardar como pending - mas NÃO consumir ainda
         if (isClassPower) {
           const p = room.classPower[playerSide];
           if (!p || p.charges < 1) {
             ws.send(JSON.stringify({ type: 'error', message: 'Sem cargas disponíveis para o poder.' }));
             return;
           }
-          // Consumir uma carga do poder de classe
-          p.charges = Math.max(0, p.charges - 1);
-          p.cooldown = p.charges < 3 ? 20 : 0;
-          room.powerUsed[playerSide] = true;
         } else {
-          // Verificar se o jogador tem a carta na mão
           if (!room.hands[playerSide] || !room.hands[playerSide].includes(card)) {
             ws.send(JSON.stringify({ type: 'error', message: 'Você não tem esta carta na mão' }));
             return;
           }
-          // Remover a carta da mão do jogador
-          room.hands[playerSide] = room.hands[playerSide].filter((c) => c !== card);
-          // Marcar cartas usadas (para cartas normais, não counterspell)
-          if (card !== 'counterspell') {
-            room.cardsUsed[playerSide] = true;
-          }
         }
+        // Guardar detalhes da carta - consumo será feito após decisão do counterspell
+        room.pendingCard = { card, target, playerSide, isClassPower, powerId };
         // Verificar se o adversário tem contramagia
         const opponentSide = room.sides ? room.sides.find((s) => s !== playerSide) : null;
         if (opponentSide && room.hands[opponentSide] && room.hands[opponentSide].includes('counterspell') && !room.cardsUsed[opponentSide]) {
-          // Guardar detalhes da carta para confirmar depois da resposta
-          room.pendingCard = { card, target, playerSide, isClassPower, powerId };
           // Notificar o adversário para usar contramagia
           const oppIdx = room.players.indexOf(ws);
           const otherIdx = oppIdx === 0 ? 1 : 0;
@@ -512,11 +516,11 @@ room.classPower = { w: { charges: 1, cooldown: 20 }, b: { charges: 1, cooldown: 
           if (otherWs) {
             otherWs.send(JSON.stringify({ type: 'counterspellRequest', card, target, playerSide, isClassPower, powerId }));
           }
-          // Broadcastar estado atualizado (mãos)
           broadcast(room, buildStatePayload(room));
           return;
         }
-        // Nenhum counterspell disponível, confirmar carta
+        // Nenhum counterspell disponível, consumir e confirmar carta imediatamente
+        consumeCardServer(room, playerSide, card, isClassPower);
         broadcast(room, buildStatePayload(room));
         broadcast(room, { type: 'cardConfirmed', card, target, playerSide, isClassPower, powerId });
       } else if (msg.type === 'counterspellResponse') {
@@ -525,7 +529,11 @@ room.classPower = { w: { charges: 1, cooldown: 20 }, b: { charges: 1, cooldown: 
         const playerSide = room.sides ? room.sides[room.players.indexOf(ws)] : null;
         if (!playerSide) return;
         const side = playerSide;
+        const pending = room.pendingCard;
+        if (!pending) return;
         if (accepted) {
+          // Oponente usou contramagia: consumir a carta/poder original E a contramagia
+          consumeCardServer(room, pending.playerSide, pending.card, pending.isClassPower);
           // Remover contramagia da mão do oponente
           room.hands[side] = room.hands[side] ? room.hands[side].filter((c) => c !== 'counterspell') : [];
           room.cardsUsed[side] = true;
@@ -537,12 +545,12 @@ room.classPower = { w: { charges: 1, cooldown: 20 }, b: { charges: 1, cooldown: 
             otherWs.send(JSON.stringify({ type: 'cardCancelled' }));
           }
         } else {
-          // Contramagia recusada: confirmar a carta para o jogador original executar
+          // Contramagia recusada: consumir a carta/poder original e confirmar
+          consumeCardServer(room, pending.playerSide, pending.card, pending.isClassPower);
           const oppIdx = room.players.indexOf(ws);
           const otherIdx = oppIdx === 0 ? 1 : 0;
           const otherWs = room.players[otherIdx];
-          const pending = room.pendingCard;
-          if (otherWs && pending) {
+          if (otherWs) {
             otherWs.send(
               JSON.stringify({
                 type: 'cardConfirmed',
