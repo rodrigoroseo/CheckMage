@@ -148,6 +148,7 @@ function buildStatePayload(room) {
     hands: room.hands || { w: [], b: [] },
     cardsUsed: room.cardsUsed || { w: false, b: false },
     sacrificeUsed: room.sacrificeUsed || { w: false, b: false },
+    powerUsed: room.powerUsed || { w: false, b: false },
   };
 }
 
@@ -165,7 +166,7 @@ function tickClassPower(room, side) {
   if (p.cooldown > 0) {
     p.cooldown = Math.max(0, p.cooldown - 1);
   }
-  if (p.cooldown === 0) {
+  if (p.cooldown === 0 && p.charges < 3) {
     p.charges++;
     p.cooldown = p.charges < 3 ? 20 : 0;
   }
@@ -286,6 +287,7 @@ app.post('/api/rooms', (req, res) => {
     hands: { w: [], b: [] },
     cardsUsed: { w: false, b: false },
     sacrificeUsed: { w: false, b: false },
+    powerUsed: { w: false, b: false },
   };
   rooms.set(code, room);
   res.json({ code, url: `${HOST}/room/${code}`, opts: req.body || {} });
@@ -452,7 +454,7 @@ wss.on('connection', (ws, req) => {
           // Regenerar as mãos com as classes definidas
           room.opts.classes = { w: room.classes.w, b: room.classes.b };
           room.hands = generateOpeningCards(room.opts);
-          room.classPower = { w: { charges: 1, cooldown: 0 }, b: { charges: 1, cooldown: 0 } };
+room.classPower = { w: { charges: 1, cooldown: 20 }, b: { charges: 1, cooldown: 20 } };
           broadcast(room, { type: 'classReady', classes: { w: room.classes.w, b: room.classes.b }, hands: room.hands });
         }
       } else if (msg.type === 'cardPlay') {
@@ -465,32 +467,44 @@ wss.on('connection', (ws, req) => {
         }
         const card = msg.card;
         const target = msg.target;
+        const isClassPower = !!msg.isClassPower;
+        const powerId = msg.powerId;
         if (!card || !target) {
           ws.send(JSON.stringify({ type: 'error', message: 'Dados de carta inválidos' }));
           return;
         }
-        // Verificar se o jogador tem a carta na mão
-        if (!room.hands[playerSide] || !room.hands[playerSide].includes(card)) {
-          ws.send(JSON.stringify({ type: 'error', message: 'Você não tem esta carta na mão' }));
-          return;
-        }
-        // Remover a carta da mão do jogador
-        room.hands[playerSide] = room.hands[playerSide].filter((c) => c !== card);
-        // Marcar cartas usadas (para cartas normais, não counterspell)
-        if (card !== 'counterspell') {
-          room.cardsUsed[playerSide] = true;
+        if (isClassPower) {
+          const p = room.classPower[playerSide];
+          if (!p || p.charges < 1) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Sem cargas disponíveis para o poder.' }));
+            return;
+          }
+          // Consumir uma carga do poder de classe
+          p.charges = Math.max(0, p.charges - 1);
+          p.cooldown = p.charges < 3 ? 20 : 0;
+          room.powerUsed[playerSide] = true;
+        } else {
+          // Verificar se o jogador tem a carta na mão
+          if (!room.hands[playerSide] || !room.hands[playerSide].includes(card)) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Você não tem esta carta na mão' }));
+            return;
+          }
+          // Remover a carta da mão do jogador
+          room.hands[playerSide] = room.hands[playerSide].filter((c) => c !== card);
+          // Marcar cartas usadas (para cartas normais, não counterspell)
+          if (card !== 'counterspell') {
+            room.cardsUsed[playerSide] = true;
+          }
         }
         // Verificar se o adversário tem contramagia
         const opponentSide = room.sides ? room.sides.find((s) => s !== playerSide) : null;
         if (opponentSide && room.hands[opponentSide] && room.hands[opponentSide].includes('counterspell') && !room.cardsUsed[opponentSide]) {
           // Notificar o adversário para usar contramagia
-          const opponentWs = room.players.find((p) => room.sides && room.sides.includes(side) && p !== ws);
-          // Encontrar o oponente por índice
           const oppIdx = room.players.indexOf(ws);
           const otherIdx = oppIdx === 0 ? 1 : 0;
           const otherWs = room.players[otherIdx];
           if (otherWs) {
-            otherWs.send(JSON.stringify({ type: 'counterspellRequest', card, target, playerSide }));
+            otherWs.send(JSON.stringify({ type: 'counterspellRequest', card, target, playerSide, isClassPower, powerId }));
           }
           // Broadcastar estado atualizado (mãos)
           broadcast(room, buildStatePayload(room));
@@ -526,7 +540,7 @@ wss.on('connection', (ws, req) => {
         const otherIdx = oppIdx === 0 ? 1 : 0;
         const otherWs = room.players[otherIdx];
         if (otherWs) {
-          otherWs.send(JSON.stringify({ type: 'counterspellRequest', card: msg.card, target: msg.target, playerSide }));
+          otherWs.send(JSON.stringify({ type: 'counterspellRequest', card: msg.card, target: msg.target, playerSide, isClassPower: !!msg.isClassPower, powerId: msg.powerId }));
         }
       } else if (msg.type === 'resign') {
         broadcast(room, { type: 'resign', player: msg.player });

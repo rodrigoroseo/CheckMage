@@ -3871,7 +3871,7 @@ function mpHandleMessage(msg) {
         showModal(
           'RESPOSTA MÁGICA',
           (MP.side === 'w' ? 'Brancas' : 'Pretas') + ' têm Contramagia.',
-          'A carta "' + cardInfo[msg.card.id].name + '" foi confirmada. Usar Contramagia cancela só o efeito, sem consumir o turno normal de quem a jogou.',
+          'A carta "' + cardInfo[msg.card].name + '" foi confirmada. Usar Contramagia cancela só o efeito, sem consumir o turno normal de quem a jogou.',
           [
             {
               label: 'Deixar resolver',
@@ -3909,7 +3909,7 @@ function mpHandleMessage(msg) {
         showModal(
           'RESPOSTA MÁGICA',
           (MP.side === 'w' ? 'Brancas' : 'Pretas') + ' têm Contramagia.',
-          'A carta "' + msg.card.id + '" foi confirmada. Usar Contramagia cancela só o efeito.',
+          'A carta "' + msg.card + '" foi confirmada. Usar Contramagia cancela só o efeito.',
           [
             {
               label: 'Cancelar com Contramagia',
@@ -4007,9 +4007,15 @@ function mpSendClassPick(classId) {
   if (!MP.ws || MP.ws.readyState !== 1) return;
   MP.ws.send(JSON.stringify({ type: 'classPick', side: MP.side, class: classId }));
 }
-function mpSendCardPlay(card, target) {
+function mpSendCardPlay(c, target) {
   if (!MP.ws || MP.ws.readyState !== 1) return;
-  MP.ws.send(JSON.stringify({ type: 'cardPlay', card, target }));
+  MP.ws.send(JSON.stringify({
+    type: 'cardPlay',
+    card: c.id,
+    target,
+    isClassPower: !!c.classPower,
+    powerId: c.classPower ? c.id : null,
+  }));
 }
 function mpSendCounterspellResponse(accepted) {
   if (!MP.ws || MP.ws.readyState !== 1) return;
@@ -4174,6 +4180,7 @@ function applyState(msg) {
   state.hands = msg.hands || { w: [], b: [] };
   state.cardsUsed = msg.cardsUsed || { w: false, b: false };
   state.sacrificeUsed = msg.sacrificeUsed || { w: false, b: false };
+  state.powerUsed = msg.powerUsed || { w: false, b: false };
   if (msg.winner) {
     state.ended = true;
     toast(msg.winner === 'w' ? 'Brancas venceram!' : 'Pretas venceram!');
