@@ -363,6 +363,7 @@ wss.on('connection', (ws, req) => {
       startMsg.hands = room.hands;
       startMsg.classPower = room.classPower;
     }
+    if (initialForecast) room.eventForecast = initialForecast;
     broadcast(room, startMsg);
   }
 

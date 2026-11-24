@@ -3828,6 +3828,7 @@ function mpHandleMessage(msg) {
       toast('Partida começou!');
       startMultiplayerGame(msg.fen, msg.opts);
       if (msg.eventForecast) state.eventForecast = { type: msg.eventForecast.type, squares: [] };
+      render();
       break;
     case 'state':
       applyState(msg);
