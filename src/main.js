@@ -3815,7 +3815,7 @@ function mpHandleMessage(msg) {
       if (MP.opponentJoined) {
         toast('Adversário entrou. Partida começando!');
         $('#room-status').innerHTML = '<span class="room-status-dot"></span><span>Adversário conectado!</span>';
-        setTimeout(() => startMultiplayerGame(msg.fen, msg.opts), 1200);
+        startMultiplayerGame(msg.fen, msg.opts);
       } else {
         $('#room-status').innerHTML = '<span class="room-status-dot"></span><span>Você é o Jogador 1. Aguardando adversário...</span>';
       }
@@ -3857,6 +3857,7 @@ function mpHandleMessage(msg) {
       break;
     case 'eventTrigger':
       applyRemoteEvent(msg);
+      render();
       break;
     case 'eventForecast':
       state.eventForecast = { type: msg.eventType, squares: [] };
