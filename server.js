@@ -271,6 +271,43 @@ function gainCardRandom(room, side, opts) {
   }
 }
 
+const COUNTERSPELL_TIMEOUT_MS = 20000;
+
+function clearPendingCard(room) {
+  if (room.pendingTimer) {
+    clearTimeout(room.pendingTimer);
+    room.pendingTimer = null;
+  }
+  room.pendingCard = null;
+}
+
+// Resolve a carta pendente (aguardando decisão de contramagia) e avisa os dois jogadores.
+function resolvePendingCard(room, accepted, responderSide) {
+  const pending = room.pendingCard;
+  if (!pending) return false;
+  clearPendingCard(room);
+  // A carta/poder original é sempre consumido, tenha sido anulado ou não
+  consumeCardServer(room, pending.playerSide, pending.card, pending.isClassPower);
+  if (accepted) {
+    const hand = responderSide ? room.hands[responderSide] : null;
+    const idx = hand ? hand.indexOf('counterspell') : -1;
+    if (idx !== -1) hand.splice(idx, 1);
+    if (responderSide) room.cardsUsed[responderSide] = true;
+    broadcast(room, { type: 'cardCancelled', playerSide: pending.playerSide });
+  } else {
+    broadcast(room, {
+      type: 'cardConfirmed',
+      card: pending.card,
+      target: pending.target,
+      playerSide: pending.playerSide,
+      isClassPower: pending.isClassPower,
+      powerId: pending.powerId,
+    });
+  }
+  broadcast(room, buildStatePayload(room));
+  return true;
+}
+
 app.use(express.json());
 app.use(express.static(join(__dirname, 'dist')));
 
@@ -279,6 +316,7 @@ app.use(express.static(join(__dirname, 'dist')));
 app.post('/api/rooms', (req, res) => {
   const code = generateCode();
   const room = {
+    code,
     players: [],
     turn: 'w',
     history: [],
@@ -504,18 +542,34 @@ room.classPower = { w: { charges: 1, cooldown: 20 }, b: { charges: 1, cooldown: 
             return;
           }
         }
-        // Guardar detalhes da carta - consumo será feito após decisão do counterspell
-        room.pendingCard = { card, target, playerSide, isClassPower, powerId };
-        // Verificar se o adversário tem contramagia
+        if (room.pendingCard) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Aguarde a resolução da carta anterior.' }));
+          return;
+        }
+        // Verificar se o adversário (conectado) tem contramagia
         const opponentSide = room.sides ? room.sides.find((s) => s !== playerSide) : null;
-        if (opponentSide && room.hands[opponentSide] && room.hands[opponentSide].includes('counterspell') && !room.cardsUsed[opponentSide]) {
-          // Notificar o adversário para usar contramagia
-          const oppIdx = room.players.indexOf(ws);
-          const otherIdx = oppIdx === 0 ? 1 : 0;
-          const otherWs = room.players[otherIdx];
-          if (otherWs && otherWs.readyState === 1) {
-            otherWs.send(JSON.stringify({ type: 'counterspellRequest', card, target, playerSide, isClassPower, powerId }));
-          }
+        const otherWs = room.players.find((p) => p !== ws);
+        if (
+          opponentSide &&
+          otherWs &&
+          otherWs.readyState === 1 &&
+          room.hands[opponentSide] &&
+          room.hands[opponentSide].includes('counterspell') &&
+          !room.cardsUsed[opponentSide]
+        ) {
+          // Guardar detalhes da carta - consumo será feito após decisão do counterspell
+          room.pendingCard = { card, target, playerSide, isClassPower, powerId, responderWs: otherWs };
+          // Sem resposta a tempo, a carta resolve normalmente (evita travar o jogo)
+          room.pendingTimer = setTimeout(() => {
+            const pending = room.pendingCard;
+            if (!pending) return;
+            const responderSide = room.sides.find((s) => s !== pending.playerSide);
+            if (pending.responderWs && pending.responderWs.readyState === 1) {
+              pending.responderWs.send(JSON.stringify({ type: 'counterspellExpired' }));
+            }
+            resolvePendingCard(room, false, responderSide);
+          }, COUNTERSPELL_TIMEOUT_MS);
+          otherWs.send(JSON.stringify({ type: 'counterspellRequest', card, target, playerSide, isClassPower, powerId }));
           broadcast(room, buildStatePayload(room));
           return;
         }
@@ -525,35 +579,14 @@ room.classPower = { w: { charges: 1, cooldown: 20 }, b: { charges: 1, cooldown: 
         broadcast(room, { type: 'cardConfirmed', card, target, playerSide, isClassPower, powerId });
       } else if (msg.type === 'counterspellResponse') {
         // Servidor processa resposta de contramagia
-        const accepted = msg.accepted;
         const playerSide = room.sides ? room.sides[room.players.indexOf(ws)] : null;
         if (!playerSide) return;
-        const side = playerSide;
         const pending = room.pendingCard;
         if (!pending) return;
-        if (accepted) {
-          // Oponente usou contramagia: consumir a carta/poder original E a contramagia
-          consumeCardServer(room, pending.playerSide, pending.card, pending.isClassPower);
-          // Remover contramagia da mão do oponente
-          room.hands[side] = room.hands[side] ? room.hands[side].filter((c) => c !== 'counterspell') : [];
-          room.cardsUsed[side] = true;
-          // Notificar ambos os jogadores que a carta foi cancelada
-          broadcast(room, { type: 'cardCancelled' });
-        } else {
-          // Contramagia recusada: consumir a carta/poder original e confirmar
-          consumeCardServer(room, pending.playerSide, pending.card, pending.isClassPower);
-          // Notificar ambos os jogadores que a carta foi confirmada
-          broadcast(room, {
-            type: 'cardConfirmed',
-            card: pending.card,
-            target: pending.target,
-            playerSide: pending.playerSide,
-            isClassPower: pending.isClassPower,
-            powerId: pending.powerId,
-          });
-        }
-        room.pendingCard = null;
-        broadcast(room, buildStatePayload(room));
+        // Só o oponente de quem jogou a carta pode responder
+        if (playerSide === pending.playerSide) return;
+        const hasCounter = !!room.hands[playerSide] && room.hands[playerSide].includes('counterspell');
+        resolvePendingCard(room, !!msg.accepted && hasCounter, playerSide);
       } else if (msg.type === 'counterspellRequest') {
         // Servidor encaminha solicitação de contramagia para o adversário
         const playerSide = msg.playerSide;
@@ -583,7 +616,9 @@ room.classPower = { w: { charges: 1, cooldown: 20 }, b: { charges: 1, cooldown: 
     const idx = room.players.indexOf(ws);
     if (idx !== -1) {
       room.players.splice(idx, 1);
+      clearPendingCard(room);
       if (room.players.length === 0) rooms.delete(room.code);
+      else broadcast(room, { type: 'opponentLeft' });
     }
   });
 });

@@ -3847,11 +3847,27 @@ function mpHandleMessage(msg) {
     case 'resign':
       toast(`Jogador ${msg.player} resignou.`);
       break;
+    case 'counterspellExpired':
+      // Tempo esgotado: o servidor resolveu a carta sem contramagia
+      clearModal();
+      state.counterspellPending = null;
+      toast('Tempo esgotado: a carta foi resolvida sem Contramagia.');
+      render();
+      break;
     case 'opponentLeft':
       toast('Adversário saiu da sala.');
+      if (state.waitingForCounterspell) {
+        state.waitingForCounterspell = false;
+        render();
+      }
       break;
     case 'error':
       toast(msg.message || 'Erro na sala.');
+      // Evita ficar pausado esperando uma resposta que nunca virá
+      if (state.waitingForCounterspell) {
+        state.waitingForCounterspell = false;
+        render();
+      }
       break;
     case 'classPick':
       state.classes[msg.side] = msg.class;
@@ -3879,15 +3895,17 @@ function mpHandleMessage(msg) {
         showModal(
           'RESPOSTA MÁGICA',
           (MP.side === 'w' ? 'Brancas' : 'Pretas') + ' têm Contramagia.',
-          'A carta "' + cardInfo[msg.card].name + '" foi confirmada. Usar Contramagia cancela só o efeito, sem consumir o turno normal de quem a jogou.',
+          'A carta "' + (cardInfo[msg.card]?.name || msg.card) + '" foi confirmada. Usar Contramagia cancela só o efeito, sem consumir o turno normal de quem a jogou.',
           [
             {
               label: 'Deixar resolver',
               fn: () => {
                 if (!state.counterspellPending) return;
-                state.counterspellPending.card.counterspellChecked = true;
-                state.counterspellPending = null;
-                mpSendCounterspellResponse(false);
+                try {
+                  state.counterspellPending = null;
+                } finally {
+                  mpSendCounterspellResponse(false);
+                }
               },
             },
             {
@@ -3896,10 +3914,13 @@ function mpHandleMessage(msg) {
               fn: () => {
                 if (!state.counterspellPending) return;
                 const pending = state.counterspellPending;
-                state.hands[MP.side].splice(pending.counterIndex, 1);
-                state.cardsUsed[MP.side] = true;
-                state.counterspellPending = null;
-                mpSendCounterspellResponse(true);
+                try {
+                  state.hands[MP.side].splice(pending.counterIndex, 1);
+                  state.cardsUsed[MP.side] = true;
+                } finally {
+                  state.counterspellPending = null;
+                  mpSendCounterspellResponse(true);
+                }
                 playSound('cardDefault');
                 toast('Contramagia! A carta foi anulada.');
                 render();
@@ -3917,17 +3938,20 @@ function mpHandleMessage(msg) {
         showModal(
           'RESPOSTA MÁGICA',
           (MP.side === 'w' ? 'Brancas' : 'Pretas') + ' têm Contramagia.',
-          'A carta "' + msg.card + '" foi confirmada. Usar Contramagia cancela só o efeito.',
+          'A carta "' + (cardInfo[msg.card]?.name || msg.card) + '" foi confirmada. Usar Contramagia cancela só o efeito.',
           [
             {
               label: 'Cancelar com Contramagia',
               primary: true,
               fn: () => {
                 if (!state.counterspellPending) return;
-                state.hands[MP.side].splice(counterIndex, 1);
-                state.cardsUsed[MP.side] = true;
-                state.counterspellPending = null;
-                mpSendCounterspellResponse(true);
+                try {
+                  state.hands[MP.side].splice(counterIndex, 1);
+                  state.cardsUsed[MP.side] = true;
+                } finally {
+                  state.counterspellPending = null;
+                  mpSendCounterspellResponse(true);
+                }
                 playSound('cardDefault');
                 toast('Contramagia! A carta foi anulada.');
                 render();
@@ -3937,9 +3961,11 @@ function mpHandleMessage(msg) {
               label: 'Deixar resolver',
               fn: () => {
                 if (!state.counterspellPending) return;
-                state.counterspellPending.card.counterspellChecked = true;
-                state.counterspellPending = null;
-                mpSendCounterspellResponse(false);
+                try {
+                  state.counterspellPending = null;
+                } finally {
+                  mpSendCounterspellResponse(false);
+                }
               },
             },
           ],
@@ -3951,6 +3977,11 @@ function mpHandleMessage(msg) {
       break;
     case 'cardConfirmed':
       // Carta foi confirmada (contramagia não usada ou não disponível)
+      // Só quem jogou a carta aplica o efeito; o outro lado apenas atualiza a tela
+      if (msg.playerSide && msg.playerSide !== MP.side) {
+        render();
+        break;
+      }
       state.waitingForCounterspell = false;
       try {
         if (state.pendingCard) {
@@ -3968,6 +3999,11 @@ function mpHandleMessage(msg) {
       break;
     case 'cardCancelled':
       // Carta foi cancelada por contramagia
+      // O lado que respondeu não perde a própria seleção em andamento
+      if (msg.playerSide && msg.playerSide !== MP.side) {
+        render();
+        break;
+      }
       state.waitingForCounterspell = false;
       state.pendingCard = null;
       state.selected = null;
