@@ -3680,20 +3680,22 @@ function placePiece(s, color, type) {
 function consumeCard(details = 'Efeito aplicado.', levelCost = 1) {
   const c = state.pendingCard;
   if (!c) return;
-  if (c.classPower) {
-    state.powerUsed[c.side] = true;
-    spendClassPower(c.side, Math.min(levelCost, c.level || 1));
-  } else {
-    const base = c.id.startsWith('treason')
-        ? 'treason'
-        : c.id.startsWith('resurrect')
-          ? 'resurrect'
-          : null,
-      remaining = base ? c.level - Math.min(levelCost, c.level) : 0;
-    if (remaining > 0) state.hands[c.side][c.index] = leveledCardId(base, remaining);
-    else state.hands[c.side].splice(c.index, 1);
-    if (c.id === 'sacrifice' && !state.sacrificeUsed[c.side]) state.sacrificeUsed[c.side] = true;
-    else state.cardsUsed[c.side] = true;
+  if (!c.serverConsumed) {
+    if (c.classPower) {
+      state.powerUsed[c.side] = true;
+      spendClassPower(c.side, Math.min(levelCost, c.level || 1));
+    } else {
+      const base = c.id.startsWith('treason')
+          ? 'treason'
+          : c.id.startsWith('resurrect')
+            ? 'resurrect'
+            : null,
+        remaining = base ? c.level - Math.min(levelCost, c.level) : 0;
+      if (remaining > 0) state.hands[c.side][c.index] = leveledCardId(base, remaining);
+      else state.hands[c.side].splice(c.index, 1);
+      if (c.id === 'sacrifice' && !state.sacrificeUsed[c.side]) state.sacrificeUsed[c.side] = true;
+      else state.cardsUsed[c.side] = true;
+    }
   }
   const sound = c.id.startsWith('resurrect')
     ? 'cardResurrect'
@@ -3948,7 +3950,8 @@ function mpHandleMessage(msg) {
     case 'cardConfirmed':
       // Carta foi confirmada (contramagia não usada ou não disponível)
       if (state.pendingCard) {
-        cardTarget(state.pendingCard.target, true);
+        state.pendingCard.serverConsumed = true;
+        cardTarget(msg.target, true);
         state.pendingCard = null;
       }
       break;

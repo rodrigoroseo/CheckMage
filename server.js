@@ -394,6 +394,10 @@ wss.on('connection', (ws, req) => {
           room.round = room.round + 1;
           tickClassPower(room, 'w');
           tickClassPower(room, 'b');
+          // Resetar flags de uso por turno ao iniciar um novo round
+          room.cardsUsed = { w: false, b: false };
+          room.powerUsed = { w: false, b: false };
+          room.sacrificeUsed = { w: false, b: false };
         }
         if (room.opts?.events) {
           room.eventPly = room.eventPly + 1;
@@ -499,6 +503,8 @@ room.classPower = { w: { charges: 1, cooldown: 20 }, b: { charges: 1, cooldown: 
         // Verificar se o adversário tem contramagia
         const opponentSide = room.sides ? room.sides.find((s) => s !== playerSide) : null;
         if (opponentSide && room.hands[opponentSide] && room.hands[opponentSide].includes('counterspell') && !room.cardsUsed[opponentSide]) {
+          // Guardar detalhes da carta para confirmar depois da resposta
+          room.pendingCard = { card, target, playerSide, isClassPower, powerId };
           // Notificar o adversário para usar contramagia
           const oppIdx = room.players.indexOf(ws);
           const otherIdx = oppIdx === 0 ? 1 : 0;
@@ -512,6 +518,7 @@ room.classPower = { w: { charges: 1, cooldown: 20 }, b: { charges: 1, cooldown: 
         }
         // Nenhum counterspell disponível, confirmar carta
         broadcast(room, buildStatePayload(room));
+        broadcast(room, { type: 'cardConfirmed', card, target, playerSide, isClassPower, powerId });
       } else if (msg.type === 'counterspellResponse') {
         // Servidor processa resposta de contramagia
         const accepted = msg.accepted;
@@ -529,7 +536,26 @@ room.classPower = { w: { charges: 1, cooldown: 20 }, b: { charges: 1, cooldown: 
           if (otherWs) {
             otherWs.send(JSON.stringify({ type: 'cardCancelled' }));
           }
+        } else {
+          // Contramagia recusada: confirmar a carta para o jogador original executar
+          const oppIdx = room.players.indexOf(ws);
+          const otherIdx = oppIdx === 0 ? 1 : 0;
+          const otherWs = room.players[otherIdx];
+          const pending = room.pendingCard;
+          if (otherWs && pending) {
+            otherWs.send(
+              JSON.stringify({
+                type: 'cardConfirmed',
+                card: pending.card,
+                target: pending.target,
+                playerSide: pending.playerSide,
+                isClassPower: pending.isClassPower,
+                powerId: pending.powerId,
+              }),
+            );
+          }
         }
+        room.pendingCard = null;
         broadcast(room, buildStatePayload(room));
       } else if (msg.type === 'counterspellRequest') {
         // Servidor encaminha solicitação de contramagia para o adversário
