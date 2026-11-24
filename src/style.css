@@ -692,6 +692,12 @@ p {
 .board-wrap.waiting .square {
   pointer-events: none;
 }
+.board-wrap.waiting .class-portrait {
+  opacity: 0.35;
+  filter: grayscale(1);
+  pointer-events: none;
+  cursor: not-allowed;
+}
 .chessboard {
   width: min(100%, 420px);
   aspect-ratio: 1;
