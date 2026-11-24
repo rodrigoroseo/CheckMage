@@ -4174,6 +4174,30 @@ body {
   opacity: 0.35;
   cursor: not-allowed;
 }
+/* Black perspective: swap class portrait positions + capture rack sides. */
+.board-column.flipped #class-portrait-black {
+  top: auto;
+  right: auto;
+  bottom: 8px;
+  left: 8px;
+}
+.board-column.flipped #class-portrait-white {
+  top: 8px;
+  right: 8px;
+  bottom: auto;
+  left: auto;
+}
+.board-column.flipped .capture-stats .capture-player[data-capture-side='w'] {
+  order: 3;
+  justify-content: flex-end;
+}
+.board-column.flipped .capture-stats .capture-player[data-capture-side='b'] {
+  order: 1;
+  justify-content: flex-start;
+}
+.board-column.flipped .capture-stats #material-balance {
+  order: 2;
+}
 @media (max-width: 720px) {
   .class-portrait {
     width: 65px;

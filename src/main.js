@@ -988,8 +988,15 @@ function renderBoard() {
   board.classList.toggle('white-selected', state.selected && pieceAt(state.selected)?.color === 'w');
   const selectedMoves = state.legal;
   const visible = state.opts.mode === 'fog' ? fogVisible() : new Set();
-  for (let r = 7; r >= 0; r--)
-    for (let f = 0; f < 8; f++) {
+  const flipped = MP.connected && MP.side === 'b';
+  const ranks = flipped ? [0, 1, 2, 3, 4, 5, 6, 7] : [7, 6, 5, 4, 3, 2, 1, 0];
+  const files = flipped ? [7, 6, 5, 4, 3, 2, 1, 0] : [0, 1, 2, 3, 4, 5, 6, 7];
+  const $boardWrap = $('.board-column');
+  if ($boardWrap) {
+    $boardWrap.classList.toggle('flipped', flipped);
+  }
+  for (const r of ranks)
+    for (const f of files) {
       const s = squareName(f, r),
         p = pieceAt(s),
         el = document.createElement('button');
@@ -1029,7 +1036,7 @@ function renderBoard() {
       }
       if (cardTargetSquares().includes(s)) el.classList.add('card-target');
       if (state.pendingCard?.source === s) el.classList.add('card-source');
-      if (f === 0) {
+      if (flipped ? f === 7 : f === 0) {
         const rank = document.createElement('span');
         rank.className = 'coordinate rank-label';
         rank.textContent = String(r + 1);
@@ -1087,6 +1094,7 @@ function renderBoard() {
       board.append(el);
     }
 }
+
 function renderStatus() {
   const c = state.game.turn(),
     check = state.game.isCheck() && !(state.opts.mode === 'fog' && fogHasHiddenCheck(c)),
