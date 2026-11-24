@@ -3393,12 +3393,13 @@ function cardTarget(s, fromServer = false) {
     : id === 'shield' ||
       (id === 'bishopShift' && c.stage === 'bishop-move') ||
       finalStages.includes(c.stage);
-  if (finalTarget && MP.connected && !fromServer && !state.waitingForCounterspell) {
-    // Em multiplayer, enviar cardPlay para o servidor gerenciar counterspell
-    mpSendCardPlay(c, s);
-    state.waitingForCounterspell = true;
+  if (finalTarget && MP.connected && !fromServer) {
+    if (!state.waitingForCounterspell) {
+      mpSendCardPlay(c, s);
+      state.waitingForCounterspell = true;
+    }
     return;
-  } else if (finalTarget && offerCounterspell(c, s)) return;
+  } else if (finalTarget && !fromServer && offerCounterspell(c, s)) return;
   if (id === 'sacrifice') {
     const pool = state.enabledCards.filter(
       (card) => card !== 'sacrifice' && !classCardIds(us).includes(card),
