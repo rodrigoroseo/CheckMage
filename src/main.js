@@ -3392,9 +3392,10 @@ function cardTarget(s, fromServer = false) {
     : id === 'shield' ||
       (id === 'bishopShift' && c.stage === 'bishop-move') ||
       finalStages.includes(c.stage);
-  if (finalTarget && MP.connected && !fromServer) {
+  if (finalTarget && MP.connected && !fromServer && !state.waitingForCounterspell) {
     // Em multiplayer, enviar cardPlay para o servidor gerenciar counterspell
     mpSendCardPlay(c, s);
+    state.waitingForCounterspell = true;
     return;
   } else if (finalTarget && offerCounterspell(c, s)) return;
   if (id === 'sacrifice') {
@@ -3940,16 +3941,13 @@ function mpHandleMessage(msg) {
         );
       } else {
         // Não temos contramagia; carta segue normalmente
-        if (state.pendingCard) {
-          const c = state.pendingCard;
-          executeCardLocal(c, msg.target);
-          state.pendingCard = null;
-        }
+        mpSendCounterspellResponse(false);
       }
       break;
     case 'cardConfirmed':
       // Carta foi confirmada (contramagia não usada ou não disponível)
       if (state.pendingCard) {
+        state.waitingForCounterspell = false;
         state.pendingCard.serverConsumed = true;
         cardTarget(msg.target, true);
         state.pendingCard = null;
@@ -3958,9 +3956,7 @@ function mpHandleMessage(msg) {
     case 'cardCancelled':
       // Carta foi cancelada por contramagia
       if (state.pendingCard) {
-        // Restaurar snapshot do tabuleiro antes da carta
-        const snapshot = state.snapshots.pop();
-        if (snapshot) state.game.load(snapshot);
+        state.waitingForCounterspell = false;
         state.pendingCard = null;
         state.selected = null;
         state.legal = [];
