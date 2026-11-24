@@ -3337,7 +3337,7 @@ function offerCounterspell(card, target) {
   );
   return true;
 }
-function cardTarget(s) {
+function cardTarget(s, fromServer = false) {
   const c = state.pendingCard;
   if (!c) return;
   const id = c.id,
@@ -3375,7 +3375,11 @@ function cardTarget(s) {
     : id === 'shield' ||
       (id === 'bishopShift' && c.stage === 'bishop-move') ||
       finalStages.includes(c.stage);
-  if (finalTarget && offerCounterspell(c, s)) return;
+  if (finalTarget && MP.connected && !fromServer) {
+    // Em multiplayer, enviar cardPlay para o servidor gerenciar counterspell
+    mpSendCardPlay(c, s);
+    return;
+  } else if (finalTarget && offerCounterspell(c, s)) return;
   if (id === 'sacrifice') {
     const pool = state.enabledCards.filter(
       (card) => card !== 'sacrifice' && !classCardIds(us).includes(card),
@@ -3837,6 +3841,110 @@ function mpHandleMessage(msg) {
       state.eventForecast = { type: msg.eventType, squares: [] };
       render();
       break;
+    case 'cardPlay':
+      // Outro jogador jogou uma carta; verificar se temos contramagia disponível
+      if (state.hands[MP.side] && state.hands[MP.side].includes('counterspell') && !state.cardsUsed[MP.side]) {
+        const counterIndex = state.hands[MP.side].indexOf('counterspell');
+        state.counterspellPending = { card: msg.card, target: msg.target, responder: MP.side, counterIndex };
+        showModal(
+          'RESPOSTA MÁGICA',
+          (MP.side === 'w' ? 'Brancas' : 'Pretas') + ' têm Contramagia.',
+          'A carta "' + cardInfo[msg.card.id].name + '" foi confirmada. Usar Contramagia cancela só o efeito, sem consumir o turno normal de quem a jogou.',
+          [
+            {
+              label: 'Deixar resolver',
+              fn: () => {
+                if (!state.counterspellPending) return;
+                state.counterspellPending.card.counterspellChecked = true;
+                state.counterspellPending = null;
+                mpSendCounterspellResponse(false);
+              },
+            },
+            {
+              label: 'Cancelar com Contramagia',
+              primary: true,
+              fn: () => {
+                if (!state.counterspellPending) return;
+                const pending = state.counterspellPending;
+                state.hands[MP.side].splice(pending.counterIndex, 1);
+                state.cardsUsed[MP.side] = true;
+                state.counterspellPending = null;
+                mpSendCounterspellResponse(true);
+                playSound('cardDefault');
+                toast('Contramagia! A carta foi anulada.');
+                render();
+              },
+            },
+          ],
+        );
+      }
+      break;
+    case 'counterspellRequest':
+      // Servidor está pedindo para usar contramagia
+      if (state.hands[MP.side] && state.hands[MP.side].includes('counterspell') && !state.cardsUsed[MP.side]) {
+        const counterIndex = state.hands[MP.side].indexOf('counterspell');
+        state.counterspellPending = { card: msg.card, target: msg.target, responder: MP.side, counterIndex };
+        showModal(
+          'RESPOSTA MÁGICA',
+          (MP.side === 'w' ? 'Brancas' : 'Pretas') + ' têm Contramagia.',
+          'A carta "' + msg.card.id + '" foi confirmada. Usar Contramagia cancela só o efeito.',
+          [
+            {
+              label: 'Cancelar com Contramagia',
+              primary: true,
+              fn: () => {
+                if (!state.counterspellPending) return;
+                state.hands[MP.side].splice(counterIndex, 1);
+                state.cardsUsed[MP.side] = true;
+                state.counterspellPending = null;
+                mpSendCounterspellResponse(true);
+                playSound('cardDefault');
+                toast('Contramagia! A carta foi anulada.');
+                render();
+              },
+            },
+            {
+              label: 'Deixar resolver',
+              fn: () => {
+                if (!state.counterspellPending) return;
+                state.counterspellPending.card.counterspellChecked = true;
+                state.counterspellPending = null;
+                mpSendCounterspellResponse(false);
+              },
+            },
+          ],
+        );
+      } else {
+        // Não temos contramagia; carta segue normalmente
+        if (state.pendingCard) {
+          const c = state.pendingCard;
+          executeCardLocal(c, msg.target);
+          state.pendingCard = null;
+        }
+      }
+      break;
+    case 'cardConfirmed':
+      // Carta foi confirmada (contramagia não usada ou não disponível)
+      if (state.pendingCard) {
+        cardTarget(state.pendingCard.target, true);
+        state.pendingCard = null;
+      }
+      break;
+    case 'cardCancelled':
+      // Carta foi cancelada por contramagia
+      if (state.pendingCard) {
+        // Restaurar snapshot do tabuleiro antes da carta
+        const snapshot = state.snapshots.pop();
+        if (snapshot) state.game.load(snapshot);
+        state.pendingCard = null;
+        state.selected = null;
+        state.legal = [];
+        $('#card-selection').classList.add('hidden');
+        playSound('cardDefault');
+        toast('Contramagia! A carta foi anulada; o lance normal continua disponível.');
+        render();
+      }
+      break;
   }
 }
 function applyRemoteEvent(msg) {
@@ -3876,6 +3984,14 @@ function mpSendResign() {
 function mpSendClassPick(classId) {
   if (!MP.ws || MP.ws.readyState !== 1) return;
   MP.ws.send(JSON.stringify({ type: 'classPick', side: MP.side, class: classId }));
+}
+function mpSendCardPlay(card, target) {
+  if (!MP.ws || MP.ws.readyState !== 1) return;
+  MP.ws.send(JSON.stringify({ type: 'cardPlay', card, target }));
+}
+function mpSendCounterspellResponse(accepted) {
+  if (!MP.ws || MP.ws.readyState !== 1) return;
+  MP.ws.send(JSON.stringify({ type: 'counterspellResponse', accepted }));
 }
 function startMultiplayerGame(fen, opts) {
   state.game = new Chess();
@@ -4026,6 +4142,9 @@ function applyState(msg) {
   state.mines = msg.mines || [];
   state.swaps = msg.swaps || [];
   state.lastMove = msg.lastMove || null;
+  state.hands = msg.hands || { w: [], b: [] };
+  state.cardsUsed = msg.cardsUsed || { w: false, b: false };
+  state.sacrificeUsed = msg.sacrificeUsed || { w: false, b: false };
   if (msg.winner) {
     state.ended = true;
     toast(msg.winner === 'w' ? 'Brancas venceram!' : 'Pretas venceram!');

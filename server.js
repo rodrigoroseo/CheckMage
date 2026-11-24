@@ -127,7 +127,6 @@ function broadcast(room, msg, skipWs = null) {
 }
 
 function buildStatePayload(room) {
-  const prevTurn = room.turn;
   return {
     type: 'state',
     fen: room.fen,
@@ -146,6 +145,9 @@ function buildStatePayload(room) {
     swaps: room.swaps || [],
     lastMove: room.lastMove || null,
     winner: room.winner || null,
+    hands: room.hands || { w: [], b: [] },
+    cardsUsed: room.cardsUsed || { w: false, b: false },
+    sacrificeUsed: room.sacrificeUsed || { w: false, b: false },
   };
 }
 
@@ -194,6 +196,9 @@ app.post('/api/rooms', (req, res) => {
     swaps: [],
     lastMove: null,
     winner: null,
+    hands: { w: [], b: [] },
+    cardsUsed: { w: false, b: false },
+    sacrificeUsed: { w: false, b: false },
   };
   rooms.set(code, room);
   res.json({ code, url: `${HOST}/room/${code}`, opts: req.body || {} });
@@ -339,9 +344,79 @@ wss.on('connection', (ws, req) => {
           broadcast(room, { type: 'classReady', classes: { w: room.classes.w, b: room.classes.b } });
         }
       } else if (msg.type === 'cardPlay') {
-        // card plays são aceitos pelo servidor; estado compartilhado será repassado via state
-        broadcast(room, { type: 'cardPlay', player: msg.player, card: msg.card });
-      } else if (msg.type === 'resign') {
+        // O servidor valida e processa o uso de carta
+        // Em multiplayer, o servidor é a autoridade para as mãos
+        const playerSide = room.sides ? room.sides[room.players.indexOf(ws)] : null;
+        if (!playerSide) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Não está na partida' }));
+          return;
+        }
+        const card = msg.card;
+        const target = msg.target;
+        if (!card || !target) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Dados de carta inválidos' }));
+          return;
+        }
+        // Verificar se o jogador tem a carta na mão
+        if (!room.hands[playerSide] || !room.hands[playerSide].includes(card)) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Você não tem esta carta na mão' }));
+          return;
+        }
+        // Remover a carta da mão do jogador
+        room.hands[playerSide] = room.hands[playerSide].filter((c) => c !== card);
+        // Marcar cartas usadas (para cartas normais, não counterspell)
+        if (card !== 'counterspell') {
+          room.cardsUsed[playerSide] = true;
+        }
+        // Verificar se o adversário tem contramagia
+        const opponentSide = room.sides ? room.sides.find((s) => s !== playerSide) : null;
+        if (opponentSide && room.hands[opponentSide] && room.hands[opponentSide].includes('counterspell') && !room.cardsUsed[opponentSide]) {
+          // Notificar o adversário para usar contramagia
+          const opponentWs = room.players.find((p) => room.sides && room.sides.includes(side) && p !== ws);
+          // Encontrar o oponente por índice
+          const oppIdx = room.players.indexOf(ws);
+          const otherIdx = oppIdx === 0 ? 1 : 0;
+          const otherWs = room.players[otherIdx];
+          if (otherWs) {
+            otherWs.send(JSON.stringify({ type: 'counterspellRequest', card, target, playerSide }));
+          }
+          // Broadcastar estado atualizado (mãos)
+          broadcast(room, buildStatePayload(room));
+          return;
+        }
+        // Nenhum counterspell disponível, confirmar carta
+        broadcast(room, buildStatePayload(room));
+      } else if (msg.type === 'counterspellResponse') {
+        // Servidor processa resposta de contramagia
+        const accepted = msg.accepted;
+        const playerSide = room.sides ? room.sides[room.players.indexOf(ws)] : null;
+        if (!playerSide) return;
+        const side = playerSide;
+        if (accepted) {
+          // Remover contramagia da mão do oponente
+          room.hands[side] = room.hands[side] ? room.hands[side].filter((c) => c !== 'counterspell') : [];
+          room.cardsUsed[side] = true;
+          // Notificar o jogador original que a carta foi cancelada
+          const oppIdx = room.players.indexOf(ws);
+          const otherIdx = oppIdx === 0 ? 1 : 0;
+          const otherWs = room.players[otherIdx];
+          if (otherWs) {
+            otherWs.send(JSON.stringify({ type: 'cardCancelled' }));
+          }
+        }
+        broadcast(room, buildStatePayload(room));
+      } else if (msg.type === 'counterspellRequest') {
+        // Servidor encaminha solicitação de contramagia para o adversário
+        const playerSide = msg.playerSide;
+        const opponentSide = room.sides ? room.sides.find((s) => s !== playerSide) : null;
+        if (!opponentSide) return;
+        const oppIdx = room.players.indexOf(ws);
+        const otherIdx = oppIdx === 0 ? 1 : 0;
+        const otherWs = room.players[otherIdx];
+        if (otherWs) {
+          otherWs.send(JSON.stringify({ type: 'counterspellRequest', card: msg.card, target: msg.target, playerSide }));
+        }
+      }
         broadcast(room, { type: 'resign', player: msg.player });
       } else if (msg.type === 'drawOffer') {
         broadcast(room, { type: 'drawOffer', player: msg.player });
