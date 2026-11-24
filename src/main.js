@@ -2210,7 +2210,11 @@ function makeMove(from, to, move, promotion = 'q', freeAction = false) {
   }
   postMoveCleanup(side, captured);
   state.lastMove = { from, to };
-  if (MP.ws && MP.connected) mpSendMove(from, to, promotion, state.game.fen());
+  if (MP.ws && MP.connected) {
+    // Server-first: envia input completo (fen resultante + metadados) para o servidor
+    // autoritativo que calcula contadores, capturas, eventos e devolve state.
+    mpSendMove(from, to, promotion, state.game.fen(), captured?.type || null, state.moves[state.moves.length - 1] || `${from}-${to}`, mover?.type, side);
+  }
   render();
   checkEnd();
   return true;
@@ -2224,15 +2228,14 @@ function postMoveCleanup(side, captured) {
   state.stunned = state.stunned.filter((x) => x.color !== side);
   state.eventHighlights = [];
   const movedColor = side;
-  if (!MP.connected) {
-    state.eventPly++;
-    if (movedColor === 'b') {
-      state.round++;
-      tickClassRounds();
-      if (state.opts.events && state.eventPly >= 20) {
-        state.eventPly = 0;
-        triggerEvent();
-      }
+  state.eventPly++;
+  if (movedColor === 'b') {
+    state.round++;
+    tickClassRounds();
+    if (state.opts.events && state.eventPly >= 20) {
+      state.eventPly = 0;
+      // Em multiplayer, eventos são disparados pelo servidor via eventTrigger
+      if (!MP.connected) triggerEvent();
     }
   }
   processScheduledBishops();
@@ -3801,9 +3804,13 @@ function mpHandleMessage(msg) {
       MP.side = msg.sides && msg.sides[MP.player - 1] ? msg.sides[MP.player - 1] : MP.side || 'w';
       toast('Partida começou!');
       startMultiplayerGame(msg.fen, msg.opts);
+      if (msg.eventForecast) state.eventForecast = { type: msg.eventForecast.type, squares: [] };
+      break;
+    case 'state':
+      applyState(msg);
       break;
     case 'move':
-      applyRemoteMove(msg.from, msg.to, msg.promotion, msg.fen);
+      applyRemoteMove(msg.from, msg.to, msg.promotion, msg.fen, msg.captured, null, msg.piece, null);
       break;
     case 'resign':
       toast(`Jogador ${msg.player} resignou.`);
@@ -3854,10 +3861,13 @@ function applyRemoteEvent(msg) {
   $('#event-banner').classList.remove('hidden');
   toast(title + '! ' + desc);
   recordActivity('event', title, desc, state.game.turn());
+  // Reset event progress counter and prepare next forecast
+  state.eventPly = 0;
+  prepareEventForecast();
 }
-function mpSendMove(from, to, promotion, fen) {
+function mpSendMove(from, to, promotion, fen, captured, san, piece, color) {
   if (!MP.ws || MP.ws.readyState !== 1) return;
-  MP.ws.send(JSON.stringify({ type: 'move', from, to, promotion, fen }));
+  MP.ws.send(JSON.stringify({ type: 'move', from, to, promotion, fen, captured: captured || null, san: san || null, piece: piece || null, color: color || null }));
 }
 function mpSendResign() {
   if (!MP.ws || MP.ws.readyState !== 1) return;
@@ -3997,19 +4007,43 @@ function copyToClipboard(text) {
     ta.remove();
   }
 }
-function applyRemoteMove(from, to, promotion, fen) {
+function applyState(msg) {
+  // Sincroniza TUDO do servidor (autoridade)
+  if (msg.fen) {
+    state.game.load(msg.fen);
+  }
+  state.turn = msg.turn;
+  state.moves = msg.history || [];
+  state.round = msg.round || 1;
+  state.eventPly = msg.eventPly || 0;
+  state.eventType = msg.eventType || null;
+  state.eventForecast = msg.eventForecast || null;
+  state.dead = msg.dead || { w: [], b: [] };
+  state.classPower = msg.classPower || { w: { charges: 0, cooldown: 0 }, b: { charges: 0, cooldown: 0 } };
+  state.classes = msg.classes || { w: null, b: null };
+  state.holes = msg.holes || [];
+  state.portals = msg.portals || [];
+  state.mines = msg.mines || [];
+  state.swaps = msg.swaps || [];
+  state.lastMove = msg.lastMove || null;
+  if (msg.winner) {
+    state.ended = true;
+    toast(msg.winner === 'w' ? 'Brancas venceram!' : 'Pretas venceram!');
+  }
+  render();
+}
+
+function applyRemoteMove(from, to, promotion, fen, captured, san, piece, color) {
+  // Apenas aplica o movimento no tabuleiro local para feedback imediato.
+  // Contadores/eventos/capturas/poderes vêm via 'state' broadcast.
   if (fen) {
     try { state.game.load(fen); } catch {}
-    const movedSide = state.game.turn() === 'w' ? 'b' : 'w';
-    postMoveCleanup(movedSide, false);
-  } else {
-    const side = state.game.turn();
-    const move = state.game.move({ from, to, promotion: promotion || 'q' });
-    if (!move) return;
-    state.moves.push(move);
-    postMoveCleanup(side, false);
   }
   state.lastMove = { from, to };
+  // Som/animação de captura/movimento (p/ mover que o fez)
+  if (captured) playSound('capture');
+  else playSound('move');
+  if (piece === 'p' && (to[1] === '1' || to[1] === '8')) playSound('promotion');
   render();
 }
 

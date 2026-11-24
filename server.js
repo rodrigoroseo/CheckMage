@@ -1,6 +1,7 @@
 import express from 'express';
 import { WebSocketServer } from 'ws';
 import { createServer } from 'node:http';
+import { Chess } from 'chess.js';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -13,8 +14,9 @@ const wss = new WebSocketServer({ server, path: '/ws' });
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.RENDER_HOST_URL || `http://localhost:${PORT}`;
 
-// Salas em memória: { code: { players: [ws, ws], board: null, turn: 'w', history: [] } }
 const rooms = new Map();
+
+const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
 function generateCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -29,8 +31,12 @@ function pickRandom(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+function parseSquare(s) {
+  return { f: 'abcdefgh'.indexOf(s[0]), r: Number(s[1]) - 1 };
+}
+
 function randomEventData(opts, fen) {
-  const available = opts.eventTypes;
+  const available = opts?.eventTypes || [];
   if (!available.length) return null;
   const ev = pickRandom(available);
   const data = { type: ev };
@@ -39,48 +45,53 @@ function randomEventData(opts, fen) {
   const mines = [];
   const swaps = [];
 
-  // Parse FEN board
-  const boardText = fen.split(' ')[0];
+  const boardText = fen ? fen.split(' ')[0] : START_FEN;
   const rows = boardText.split('/');
   const pieces = {};
   for (let r = 0; r < 8; r++) {
     let f = 0;
     for (const ch of rows[r]) {
       if (/\d/.test(ch)) f += parseInt(ch);
-      else { pieces[[f, r].join(',')] = ch; f++; }
+      else {
+        pieces[[f, r].join(',')] = ch;
+        f++;
+      }
     }
   }
 
   const pieceAtSquare = (sq) => pieces[[parseSquare(sq).f, parseSquare(sq).r].join(',')];
 
   if (ev === 'quake') {
-    const candidates = ['c3','d3','e3','f3','c4','d4','e4','f4','c5','d5','e5','f5','c6','d6','e6','f6'].filter(s => !pieceAtSquare(s));
+    const candidates = ['c3','d3','e3','f3','c4','d4','e4','f4','c5','d5','e5','f5','c6','d6','e6','f6'].filter((s) => !pieceAtSquare(s));
     while (holes.length < 2 && candidates.length) {
       const i = Math.floor(Math.random() * candidates.length);
       holes.push(candidates.splice(i, 1)[0]);
     }
     data.holes = holes;
   } else if (ev === 'portal') {
-    const candidates = [...Array(8)].flatMap((_, r) => [...Array(8)].map((__, f) => String.fromCharCode(97 + f) + (r + 1))).filter(s => !pieceAtSquare(s));
+    const candidates = [...Array(8)].flatMap((_, r) => [...Array(8)].map((__, f) => String.fromCharCode(97 + f) + (r + 1))).filter((s) => !pieceAtSquare(s));
     while (portals.length < 2 && candidates.length) {
       const i = Math.floor(Math.random() * candidates.length);
       portals.push(candidates.splice(i, 1)[0]);
     }
     data.portals = portals;
   } else if (ev === 'mines') {
-    const candidates = [...Array(8)].flatMap((_, r) => [...Array(8)].map((__, f) => String.fromCharCode(97 + f) + (r + 1))).filter(s => !pieceAtSquare(s) && r > 1 && r < 6);
+    const candidates = [...Array(8)].flatMap((_, r) => [...Array(8)].map((__, f) => String.fromCharCode(97 + f) + (r + 1))).filter((s) => {
+      const pc = pieceAtSquare(s);
+      if (!pc) return true;
+      const r = parseSquare(s).r;
+      return r > 1 && r < 6;
+    });
     while (mines.length < 4 && candidates.length) {
       const i = Math.floor(Math.random() * candidates.length);
       mines.push(candidates.splice(i, 1)[0]);
     }
     data.mines = mines;
   } else if (ev === 'swap') {
-    // Find valid swap pairs for each side (same logic as client, adapted)
+    const squareList = [...Array(8)].flatMap((_, r) => [...Array(8)].map((__, f) => String.fromCharCode(97 + f) + (r + 1)));
+    const swapsArr = [];
     for (const side of ['w', 'b']) {
-      const sidePieces = Object.entries(pieces).filter(([key, pc]) => pc.toLowerCase() === pc ? pc === side : pc.toUpperCase() === pc && side === 'w' || pc === pc.toUpperCase() && side === 'w');
-      // Simpler: collect all pieces of this side
-      const squareList = [...Array(8)].flatMap((_, r) => [...Array(8)].map((__, f) => String.fromCharCode(97 + f) + (r + 1)));
-      const availablePieces = squareList.filter(s => {
+      const availablePieces = squareList.filter((s) => {
         const pc = pieceAtSquare(s);
         if (!pc) return false;
         const isWhite = pc === pc.toUpperCase();
@@ -97,17 +108,15 @@ function randomEventData(opts, fen) {
           if (pawnSafe) pairs.push([a, b]);
         }
       }
-      const chosen = pairs[pickRandom(pairs) ? Math.floor(Math.random() * pairs.length) : 0];
-      if (chosen) swaps.push({ side, a: chosen[0], b: chosen[1] });
+      if (pairs.length) {
+        const chosen = pairs[Math.floor(Math.random() * pairs.length)];
+        swapsArr.push({ side, a: chosen[0], b: chosen[1] });
+      }
     }
-    data.swaps = swaps;
+    data.swaps = swapsArr;
   }
 
   return data;
-}
-
-function parseSquare(s) {
-  return { f: 'abcdefgh'.indexOf(s[0]), r: Number(s[1]) - 1 };
 }
 
 function broadcast(room, msg, skipWs = null) {
@@ -117,30 +126,89 @@ function broadcast(room, msg, skipWs = null) {
   }
 }
 
-// Servir frontend estático
+function buildStatePayload(room) {
+  const prevTurn = room.turn;
+  return {
+    type: 'state',
+    fen: room.fen,
+    turn: room.turn,
+    history: room.history,
+    round: room.round,
+    eventPly: room.eventPly,
+    eventType: room.eventType,
+    eventForecast: room.eventForecast,
+    dead: room.dead,
+    classPower: room.classPower,
+    classes: room.classes,
+    holes: room.holes || [],
+    portals: room.portals || [],
+    mines: room.mines || [],
+    swaps: room.swaps || [],
+    lastMove: room.lastMove || null,
+    winner: room.winner || null,
+  };
+}
+
+function captureCooldownReduction(type) {
+  if (type === 'n' || type === 'b') return 1;
+  if (type === 'r') return 2;
+  if (type === 'q') return 3;
+  if (type === 'p') return 1;
+  return 0;
+}
+
+function tickClassPower(side) {
+  const p = side && side.classPower[side === 'w' ? 'w' : 'b'];
+  if (!p) return;
+  if (p.cooldown > 0) {
+    p.cooldown = Math.max(0, p.cooldown - 1);
+  }
+  if (p.cooldown === 0) {
+    p.charges++;
+    p.cooldown = p.charges < 3 ? 20 : 0;
+  }
+}
+
 app.use(express.json());
 app.use(express.static(join(__dirname, 'dist')));
 
-// Criar nova sala
 app.post('/api/rooms', (req, res) => {
   const code = generateCode();
-  const room = { players: [], turn: 'w', history: [], fen: null, started: false, opts: req.body, eventPly: 0 };
+  const room = {
+    players: [],
+    turn: 'w',
+    history: [],
+    fen: START_FEN,
+    started: false,
+    opts: req.body || {},
+    eventPly: 0,
+    round: 1,
+    eventType: null,
+    eventForecast: null,
+    dead: { w: [], b: [] },
+    classPower: { w: { charges: 0, cooldown: 0 }, b: { charges: 0, cooldown: 0 } },
+    classes: { w: null, b: null },
+    holes: [],
+    portals: [],
+    mines: [],
+    swaps: [],
+    lastMove: null,
+    winner: null,
+  };
   rooms.set(code, room);
-  res.json({ code, url: `${HOST}/room/${code}`, opts: req.body });
+  res.json({ code, url: `${HOST}/room/${code}`, opts: req.body || {} });
 });
 
-// Verificar se sala existe (para entrada por código)
 app.get('/api/rooms/:code', (req, res) => {
   const room = rooms.get(req.params.code);
   if (!room) return res.status(404).json({ error: 'Sala não encontrada' });
   res.json({ code: req.params.code, players: room.players.length, started: room.started });
 });
 
-// Limpar salas inativas (24h sem activity)
 setInterval(() => {
   const now = Date.now();
   for (const [code, room] of rooms) {
-    if (now - room.lastActivity > 24 * 3600 * 1000) rooms.delete(code);
+    if (now - (room.lastActivity || 0) > 24 * 3600 * 1000) rooms.delete(code);
   }
 }, 3600 * 1000);
 
@@ -166,7 +234,6 @@ wss.on('connection', (ws, req) => {
   room.lastActivity = Date.now();
   const playerIndex = room.players.push(ws) - 1;
 
-  // Sorteia os lados: primeiro jogador fica com o lado que sortear.
   if (!room.sides) {
     room.sides = Math.random() < 0.5 ? ['w', 'b'] : ['b', 'w'];
   }
@@ -176,7 +243,19 @@ wss.on('connection', (ws, req) => {
 
   if (room.players.length === 2) {
     room.started = true;
-    broadcast(room, { type: 'start', fen: room.fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', opts: room.opts, sides: room.sides });
+    const initialForecast = randomEventData(room.opts, room.fen);
+    broadcast(room, {
+      type: 'start',
+      fen: room.fen,
+      turn: room.turn,
+      history: room.history,
+      round: room.round,
+      eventPly: room.eventPly,
+      eventType: room.eventType,
+      eventForecast: initialForecast ? { type: initialForecast.type } : null,
+      opts: room.opts,
+      sides: room.sides,
+    });
   }
 
   ws.on('message', (data) => {
@@ -185,38 +264,91 @@ wss.on('connection', (ws, req) => {
       room.lastActivity = Date.now();
 
       if (msg.type === 'move') {
-        room.fen = msg.fen;
-        // Relay de movimento para o outro jogador (inclui FEN para sincronizar)
-        broadcast(room, { type: 'move', from: msg.from, to: msg.to, promotion: msg.promotion, fen: msg.fen }, ws);
-        room.turn = room.turn === 'w' ? 'b' : 'w';
-        // Event trigger: depois da jogada das pretas (FEN mostra vez das brancas após o movimento das pretas)
-        if (msg.fen && msg.fen.split(' ')[1] === 'w') {
-          room.eventPly++;
-          if (room.eventPly >= 20 && room.opts.events && room.opts.eventTypes.length) {
-            const evData = randomEventData(room.opts, msg.fen);
+        // Adotar o FEN resultante do cliente (mesma posição de tabuleiro)
+        if (msg.fen) {
+          const g = new Chess(msg.fen);
+          room.fen = msg.fen;
+          room.turn = g.turn();
+          room.lastMove = { from: msg.from, to: msg.to };
+        }
+        const fenTurn = room.turn;
+        const movedColor = fenTurn === 'w' ? 'b' : 'w';
+
+        // Registrar no histórico
+        if (msg.san) room.history.push(msg.san);
+        else if (msg.from && msg.to) room.history.push(`${msg.from}-${msg.to}`);
+
+        // Contadores de rodada/evento: só rodadas novas quando pretas moveram
+        if (movedColor === 'b') {
+          room.round = room.round + 1;
+          tickClassPower('w');
+          tickClassPower('b');
+        }
+        if (room.opts?.events) {
+          room.eventPly = room.eventPly + 1;
+          if (room.eventPly >= 20 && room.opts.eventTypes?.length) {
+            const evData = randomEventData(room.opts, room.fen);
             if (evData) {
-              broadcast(room, { type: 'eventTrigger', ...evData });
-              room.eventPly = 0;
-              const nextForecast = randomEventData(room.opts, msg.fen);
-              if (nextForecast) broadcast(room, { type: 'eventForecast', eventType: nextForecast.type, squares: [] });
+              room.eventType = evData.type;
+              room.holes = evData.holes || [];
+              room.portals = evData.portals || [];
+              room.mines = evData.mines || [];
+              room.swaps = evData.swaps || [];
+              room.eventForecast = randomEventData(room.opts, room.fen);
+            }
+            room.eventPly = 0;
+            broadcast(room, { type: 'eventTrigger', ...(evData || {}) });
+            if (room.eventForecast) broadcast(room, { type: 'eventForecast', eventType: room.eventForecast.type, squares: [] });
+          }
+        }
+
+        // Capturas
+        if (msg.captured) {
+          const victimColor = movedColor === 'w' ? 'b' : 'w';
+          room.dead[victimColor] = room.dead[victimColor] || [];
+          room.dead[victimColor].push({ type: msg.captured, color: victimColor });
+          const reduction = captureCooldownReduction(msg.captured);
+          if (reduction > 0) {
+            const p = movedColor === 'w' ? room.classPower.w : room.classPower.b;
+            if (p && p.cooldown > 0) p.cooldown = Math.max(0, p.cooldown - reduction);
+            if (p && p.cooldown === 0) {
+              p.charges++;
+              p.cooldown = p.charges < 3 ? 20 : 0;
             }
           }
         }
+
+        broadcast(room, {
+          type: 'move',
+          from: msg.from,
+          to: msg.to,
+          promotion: msg.promotion,
+          fen: msg.fen,
+          captured: msg.captured || null,
+          san: msg.san || null,
+          piece: msg.piece || null,
+          color: movedColor,
+        });
+        broadcast(room, buildStatePayload(room));
       } else if (msg.type === 'classPick') {
-        // Guarda a escolha de classe e repassa para o outro jogador
         room.classPicks = room.classPicks || {};
         room.classPicks[msg.side] = msg.class;
         if (room.classPicks.w && room.classPicks.b) {
-          broadcast(room, { type: 'classReady', classes: { w: room.classPicks.w, b: room.classPicks.b } });
+          room.classes.w = room.classPicks.w;
+          room.classes.b = room.classPicks.b;
+          broadcast(room, { type: 'classReady', classes: { w: room.classes.w, b: room.classes.b } });
         }
+      } else if (msg.type === 'cardPlay') {
+        // card plays são aceitos pelo servidor; estado compartilhado será repassado via state
+        broadcast(room, { type: 'cardPlay', player: msg.player, card: msg.card });
       } else if (msg.type === 'resign') {
-        broadcast(room, { type: 'resign', player: playerIndex + 1 });
+        broadcast(room, { type: 'resign', player: msg.player });
       } else if (msg.type === 'drawOffer') {
-        broadcast(room, { type: 'drawOffer', player: playerIndex + 1 });
+        broadcast(room, { type: 'drawOffer', player: msg.player });
       } else if (msg.type === 'drawAccept') {
         broadcast(room, { type: 'drawAccept' });
       } else if (msg.type === 'chat') {
-        broadcast(room, { type: 'chat', player: playerIndex + 1, text: msg.text });
+        broadcast(room, { type: 'chat', player: msg.player, text: msg.text });
       }
     } catch (e) {
       ws.send(JSON.stringify({ type: 'error', message: 'Mensagem inválida' }));
@@ -227,7 +359,6 @@ wss.on('connection', (ws, req) => {
     const idx = room.players.indexOf(ws);
     if (idx !== -1) {
       room.players.splice(idx, 1);
-      broadcast(room, { type: 'opponentLeft' });
       if (room.players.length === 0) rooms.delete(room.code);
     }
   });
