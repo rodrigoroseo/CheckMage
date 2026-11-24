@@ -200,6 +200,11 @@ function generateOpeningCards(opts) {
       }
     }
   }
+  for (const side of sides) {
+    if (opts?.classes?.[side]) {
+      openingCards[side].unshift('classPower');
+    }
+  }
   return openingCards;
 }
 
@@ -354,7 +359,9 @@ wss.on('connection', (ws, req) => {
       startMsg.classes = room.classes;
       room.opts.classes = { w: room.classes.w, b: room.classes.b };
       room.hands = generateOpeningCards(room.opts);
+      room.classPower = { w: { charges: 1, cooldown: 0 }, b: { charges: 1, cooldown: 0 } };
       startMsg.hands = room.hands;
+      startMsg.classPower = room.classPower;
     }
     broadcast(room, startMsg);
   }
@@ -444,6 +451,7 @@ wss.on('connection', (ws, req) => {
           // Regenerar as mãos com as classes definidas
           room.opts.classes = { w: room.classes.w, b: room.classes.b };
           room.hands = generateOpeningCards(room.opts);
+          room.classPower = { w: { charges: 1, cooldown: 0 }, b: { charges: 1, cooldown: 0 } };
           broadcast(room, { type: 'classReady', classes: { w: room.classes.w, b: room.classes.b }, hands: room.hands });
         }
       } else if (msg.type === 'cardPlay') {

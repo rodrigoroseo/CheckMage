@@ -620,9 +620,10 @@ function beginMatch() {
   }
   for (const side of sides) {
     if (state.classes[side]) state.classPower[side] = { charges: 1, cooldown: 0 };
+    const base = openingCards[side].filter((id) => id !== 'classPower');
     const hand = [];
     if (state.opts.classes && state.classes[side]) hand.push('classPower');
-    hand.push(...openingCards[side]);
+    hand.push(...base);
     state.hands[side] = hand;
   }
   state.classDraft = null;
