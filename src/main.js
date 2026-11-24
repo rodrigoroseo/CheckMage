@@ -559,6 +559,7 @@ function newGame() {
   state.handSide = 'w';
   state.pendingCard = null;
   state.counterspellPending = null;
+  state.waitingForCounterspell = false;
   state.mateResponseOffered = false;
   state.classes = { w: null, b: null };
   state.classPower = { w: { charges: 0, cooldown: 0 }, b: { charges: 0, cooldown: 0 } };
@@ -4054,6 +4055,7 @@ function startMultiplayerGame(fen, opts) {
   state.handSide = MP.side || 'w';
   state.pendingCard = null;
   state.counterspellPending = null;
+  state.waitingForCounterspell = false;
   state.mateResponseOffered = false;
   state.classes = { w: null, b: null };
   state.classPower = { w: { charges: 0, cooldown: 0 }, b: { charges: 0, cooldown: 0 } };
