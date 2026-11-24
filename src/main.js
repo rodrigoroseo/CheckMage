@@ -1356,6 +1356,10 @@ function renderClassPortraits() {
       : `${classInfo[cls].name} · ${classInfo[cls].description} · Carga em ${power.cooldown} rodada(s)`;
     el.disabled = !ready;
     el.onclick = () => {
+      if (state.waitingForCounterspell || state.pendingCard) {
+        toast('Aguarde a resposta da Contramagia antes de usar outro poder.');
+        return;
+      }
       if (!ready) {
         toast('Sem cargas disponíveis.');
         return;
