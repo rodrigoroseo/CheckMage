@@ -513,7 +513,7 @@ room.classPower = { w: { charges: 1, cooldown: 20 }, b: { charges: 1, cooldown: 
           const oppIdx = room.players.indexOf(ws);
           const otherIdx = oppIdx === 0 ? 1 : 0;
           const otherWs = room.players[otherIdx];
-          if (otherWs) {
+          if (otherWs && otherWs.readyState === 1) {
             otherWs.send(JSON.stringify({ type: 'counterspellRequest', card, target, playerSide, isClassPower, powerId }));
           }
           broadcast(room, buildStatePayload(room));
@@ -550,7 +550,7 @@ room.classPower = { w: { charges: 1, cooldown: 20 }, b: { charges: 1, cooldown: 
           const oppIdx = room.players.indexOf(ws);
           const otherIdx = oppIdx === 0 ? 1 : 0;
           const otherWs = room.players[otherIdx];
-          if (otherWs) {
+          if (otherWs && otherWs.readyState === 1) {
             otherWs.send(
               JSON.stringify({
                 type: 'cardConfirmed',

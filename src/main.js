@@ -982,6 +982,8 @@ function render() {
   renderResurrectionChoices();
   renderGrimoirePicker();
   renderClassPortraits();
+  const waiting = $('#waiting-overlay');
+  if (waiting) waiting.classList.toggle('hidden', !state.waitingForCounterspell);
 }
 function renderBoard() {
   const board = $('#board');
@@ -1446,7 +1448,7 @@ function onSquare(s) {
     state.suppressDragClick = false;
     return;
   }
-  if (state.ended || state.promotionPending || state.classDraft || state.motion) return;
+  if (state.ended || state.promotionPending || state.classDraft || state.motion || state.waitingForCounterspell) return;
   if (state.pendingCard) {
     cardTarget(s);
     return;
@@ -1606,7 +1608,7 @@ function updateDragSquares(from) {
     });
 }
 function startPointerDrag(event, square) {
-  if (event.button !== 0 || state.pendingCard || state.ended || state.classDraft || state.motion)
+  if (event.button !== 0 || state.pendingCard || state.ended || state.classDraft || state.motion || state.waitingForCounterspell)
     return;
   const piece = pieceAt(square);
   // Em multiplayer, pode arrastar apenas peças do lado controlado por este jogador
@@ -3361,7 +3363,7 @@ function cardTarget(s, fromServer = false) {
   const id = c.id,
     p = pieceAt(s),
     us = c.side;
-  if (!cardTargetSquares().includes(s)) {
+  if (!fromServer && !cardTargetSquares().includes(s)) {
     playSound('illegal');
     if (id === 'treason' && c.stage === 'target')
       toast('Escolha um peão inimigo destacado ao lado da sua peça.');
@@ -3948,8 +3950,8 @@ function mpHandleMessage(msg) {
       break;
     case 'cardConfirmed':
       // Carta foi confirmada (contramagia não usada ou não disponível)
+      state.waitingForCounterspell = false;
       if (state.pendingCard) {
-        state.waitingForCounterspell = false;
         state.pendingCard.serverConsumed = true;
         cardTarget(msg.target, true);
         state.pendingCard = null;
