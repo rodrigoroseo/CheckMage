@@ -982,8 +982,8 @@ function render() {
   renderResurrectionChoices();
   renderGrimoirePicker();
   renderClassPortraits();
-  const waiting = $('#waiting-overlay');
-  if (waiting) waiting.classList.toggle('hidden', !state.waitingForCounterspell);
+  const boardWrap = $('.board-wrap');
+  if (boardWrap) boardWrap.classList.toggle('waiting', state.waitingForCounterspell);
 }
 function renderBoard() {
   const board = $('#board');
@@ -1110,7 +1110,7 @@ function renderStatus() {
   $('#move-count').textContent = `MOVIMENTO ${String(state.round).padStart(2, '0')}`;
   $('#round-chip').textContent = `RODADA ${state.round}`;
   $('#ply-count').textContent = `${state.moves.length} LANCES`;
-  $('#card-selection').classList.toggle('hidden', !state.pendingCard);
+  $('#card-selection').classList.toggle('hidden', !state.pendingCard || state.waitingForCounterspell);
 }
 function boardMaterial(side) {
   let total = 0;
@@ -3951,24 +3951,27 @@ function mpHandleMessage(msg) {
     case 'cardConfirmed':
       // Carta foi confirmada (contramagia não usada ou não disponível)
       state.waitingForCounterspell = false;
-      if (state.pendingCard) {
+      const hadPending = !!state.pendingCard;
+      if (hadPending && state.pendingCard) {
         state.pendingCard.serverConsumed = true;
         cardTarget(msg.target, true);
-        state.pendingCard = null;
       }
+      state.pendingCard = null;
+      state.selected = null;
+      state.legal = [];
+      $('#card-selection').classList.add('hidden');
+      render();
       break;
     case 'cardCancelled':
       // Carta foi cancelada por contramagia
-      if (state.pendingCard) {
-        state.waitingForCounterspell = false;
-        state.pendingCard = null;
-        state.selected = null;
-        state.legal = [];
-        $('#card-selection').classList.add('hidden');
-        playSound('cardDefault');
-        toast('Contramagia! A carta foi anulada; o lance normal continua disponível.');
-        render();
-      }
+      state.waitingForCounterspell = false;
+      state.pendingCard = null;
+      state.selected = null;
+      state.legal = [];
+      $('#card-selection').classList.add('hidden');
+      playSound('cardDefault');
+      toast('Contramagia! A carta foi anulada; o lance normal continua disponível.');
+      render();
       break;
   }
 }

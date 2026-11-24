@@ -668,6 +668,7 @@ p {
   align-items: center;
   justify-content: center;
   pointer-events: none;
+  z-index: 10;
 }
 .waiting-overlay .waiting-kicker {
   font-size: 2rem;
@@ -683,6 +684,13 @@ p {
   font-size: 1rem;
   opacity: 0.8;
   text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+.board-wrap.waiting .chessboard {
+  filter: grayscale(1);
+  opacity: 0.35;
+}
+.board-wrap.waiting .square {
+  pointer-events: none;
 }
 .chessboard {
   width: min(100%, 420px);
