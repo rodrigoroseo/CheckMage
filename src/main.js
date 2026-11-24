@@ -594,7 +594,13 @@ function beginMatch() {
     powerIds = { w: classCardIds('w'), b: classCardIds('b') },
     cardCount = 3;
   let openingCards = { w: [], b: [] };
-  if (state.opts.cards) {
+  // Em multiplayer, usar as mãos geradas pelo servidor (autoridade)
+  const useServerHands = MP.connected && MP.serverHands && (MP.serverHands.w?.length || MP.serverHands.b?.length);
+  if (useServerHands) {
+    for (const side of sides) {
+      openingCards[side] = [...(MP.serverHands[side] || [])];
+    }
+  } else if (state.opts.cards) {
     const pools = Object.fromEntries(
         sides.map((side) => [
           side,
@@ -3806,6 +3812,7 @@ function mpHandleMessage(msg) {
     case 'start':
       MP.opponentJoined = true;
       MP.side = msg.sides && msg.sides[MP.player - 1] ? msg.sides[MP.player - 1] : MP.side || 'w';
+      MP.serverHands = msg.hands || { w: [], b: [] };
       toast('Partida começou!');
       startMultiplayerGame(msg.fen, msg.opts);
       if (msg.eventForecast) state.eventForecast = { type: msg.eventForecast.type, squares: [] };
@@ -3832,6 +3839,7 @@ function mpHandleMessage(msg) {
     case 'classReady':
       if (msg.classes.w) state.classes.w = msg.classes.w;
       if (msg.classes.b) state.classes.b = msg.classes.b;
+      MP.serverHands = msg.hands || { w: [], b: [] };
       beginMatch();
       break;
     case 'eventTrigger':

@@ -431,7 +431,10 @@ wss.on('connection', (ws, req) => {
         if (room.classPicks.w && room.classPicks.b) {
           room.classes.w = room.classPicks.w;
           room.classes.b = room.classPicks.b;
-          broadcast(room, { type: 'classReady', classes: { w: room.classes.w, b: room.classes.b } });
+          // Regenerar as mãos com as classes definidas
+          room.opts.classes = { w: room.classes.w, b: room.classes.b };
+          room.hands = generateOpeningCards(room.opts);
+          broadcast(room, { type: 'classReady', classes: { w: room.classes.w, b: room.classes.b }, hands: room.hands });
         }
       } else if (msg.type === 'cardPlay') {
         // O servidor valida e processa o uso de carta
