@@ -157,8 +157,8 @@ function captureCooldownReduction(type) {
   return 0;
 }
 
-function tickClassPower(side) {
-  const p = side && side.classPower[side === 'w' ? 'w' : 'b'];
+function tickClassPower(room, side) {
+  const p = room && room.classPower ? room.classPower[side] : null;
   if (!p) return;
   if (p.cooldown > 0) {
     p.cooldown = Math.max(0, p.cooldown - 1);
@@ -281,8 +281,8 @@ wss.on('connection', (ws, req) => {
         // Contadores de rodada/evento: só rodadas novas quando pretas moveram
         if (movedColor === 'b') {
           room.round = room.round + 1;
-          tickClassPower('w');
-          tickClassPower('b');
+          tickClassPower(room, 'w');
+          tickClassPower(room, 'b');
         }
         if (room.opts?.events) {
           room.eventPly = room.eventPly + 1;
