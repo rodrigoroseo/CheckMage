@@ -171,8 +171,90 @@ function tickClassPower(room, side) {
   }
 }
 
+function generateOpeningCards(opts) {
+  const sides = ['w', 'b'];
+  const cardCount = 3;
+  const openingCards = { w: [], b: [] };
+  if (opts?.cards) {
+    const classCardIds = { w: [], b: [] };
+    if (opts.classes) {
+      const classMap = { warrior: 'fury', cleric: 'resurrect', paladin: 'shield', mage: 'grimoire', warlock: 'sacrifice', ranger: 'bomb', bard: 'treason' };
+      for (const side of sides) {
+        if (opts.classes[side] && classMap[opts.classes[side]]) {
+          classCardIds[side].push(classMap[opts.classes[side]]);
+        }
+      }
+    }
+    const pools = Object.fromEntries(
+      sides.map((side) => [
+        side,
+        (opts.enabledCards || []).filter((id) => !classCardIds[side].includes(id)),
+      ]),
+    );
+    const equalCount = Math.min(cardCount, ...sides.map((side) => pools[side].length));
+    for (const side of sides) {
+      const pool = [...pools[side]];
+      while (openingCards[side].length < equalCount && pool.length) {
+        const i = Math.floor(Math.random() * pool.length);
+        openingCards[side].push(pool.splice(i, 1)[0]);
+      }
+    }
+  }
+  return openingCards;
+}
+
+function gainCardServer(room, side, id) {
+  if (!room.hands[side]) room.hands[side] = [];
+  if (id === 'treason') {
+    const held = room.hands[side]
+      .map((card, index) => ({ card, index, level: card === 'treason3' ? 3 : card === 'treason2' ? 2 : card === 'treason' ? 1 : 0 }))
+      .filter((x) => x.level > 0 && x.level < 3)
+      .sort((a, b) => a.level - b.level)[0];
+    if (held) {
+      room.hands[side][held.index] = held.level === 1 ? 'treason2' : 'treason3';
+      return;
+    }
+  }
+  if (id === 'resurrect') {
+    const held = room.hands[side]
+      .map((card, index) => ({ card, index, level: card === 'resurrect3' ? 3 : card === 'resurrect2' ? 2 : card === 'resurrect' ? 1 : 0 }))
+      .filter((x) => x.level > 0 && x.level < 3)
+      .sort((a, b) => a.level - b.level)[0];
+    if (held) {
+      room.hands[side][held.index] = held.level === 1 ? 'resurrect2' : 'resurrect3';
+      return;
+    }
+  }
+  room.hands[side].push(id);
+}
+
+function gainCardRandom(room, side, opts) {
+  if (!opts?.cards) return;
+  const classCardIds = { w: [], b: [] };
+  if (opts.classes) {
+    const classMap = { warrior: 'fury', cleric: 'resurrect', paladin: 'shield', mage: 'grimoire', warlock: 'sacrifice', ranger: 'bomb', bard: 'treason' };
+    for (const s of ['w', 'b']) {
+      if (opts.classes[s] && classMap[opts.classes[s]]) {
+        classCardIds[s].push(classMap[opts.classes[s]]);
+      }
+    }
+  }
+  const pool = (opts.enabledCards || []).filter(
+    (id) =>
+      (id === 'resurrect' || id === 'shield' || id === 'treason' || id === 'bomb' || id === 'counterspell' ||
+        id === 'fury' || id === 'bishopShift' || id === 'knightElephant' || id === 'towerRam' || id === 'kingLeap' || id === 'sacrifice') &&
+      !classCardIds[side].includes(id),
+  );
+  if (pool.length) {
+    const id = pool[Math.floor(Math.random() * pool.length)];
+    gainCardServer(room, side, id);
+  }
+}
+
 app.use(express.json());
 app.use(express.static(join(__dirname, 'dist')));
+
+// ... rest of file
 
 app.post('/api/rooms', (req, res) => {
   const code = generateCode();
@@ -248,6 +330,9 @@ wss.on('connection', (ws, req) => {
 
   if (room.players.length === 2) {
     room.started = true;
+    // Gerar cartas iniciais no servidor
+    const openingCards = generateOpeningCards(room.opts);
+    room.hands = openingCards;
     const initialForecast = randomEventData(room.opts, room.fen);
     broadcast(room, {
       type: 'start',
@@ -260,6 +345,7 @@ wss.on('connection', (ws, req) => {
       eventForecast: initialForecast ? { type: initialForecast.type } : null,
       opts: room.opts,
       sides: room.sides,
+      hands: room.hands,
     });
   }
 
@@ -320,6 +406,10 @@ wss.on('connection', (ws, req) => {
               p.charges++;
               p.cooldown = p.charges < 3 ? 20 : 0;
             }
+          }
+          // O servidor decide qual carta o jogador que capturou ganha
+          if (['n', 'b', 'r', 'q'].includes(msg.captured)) {
+            gainCardRandom(room, movedColor, room.opts);
           }
         }
 
@@ -416,7 +506,7 @@ wss.on('connection', (ws, req) => {
         if (otherWs) {
           otherWs.send(JSON.stringify({ type: 'counterspellRequest', card: msg.card, target: msg.target, playerSide }));
         }
-      }
+      } else if (msg.type === 'resign') {
         broadcast(room, { type: 'resign', player: msg.player });
       } else if (msg.type === 'drawOffer') {
         broadcast(room, { type: 'drawOffer', player: msg.player });
