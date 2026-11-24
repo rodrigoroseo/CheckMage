@@ -1398,17 +1398,18 @@ function renderHand() {
 
   const disabled = state.cardsUsed[c];
   const isOther = c !== turn;
+  const waiting = state.waitingForCounterspell;
   const items = groups.map((g) => {
     if (g.kind === 'single') {
       const cls = classInfo[state.classes[c]],
         power = state.classPower[c],
         ready = power.charges > 0;
-      const buttonDisabled = isOther || (disabled || power.charges === 0);
-      return `<button class="power-card class-power-card${isOther ? ' dimmed' : ''}" data-card="classPower" data-index="${g.index}" ${buttonDisabled ? 'disabled' : ''} title="${cls.description}"><span class="card-art">${cls.icon}</span><span><b>${cls.name}</b><small>${ready ? `Poder: ${cls.description}` : `Próxima carga em ${power.cooldown} rodada(s)`}</small><span class="charge-dots" role="img" aria-label="${power.charges} de 3 cargas">${[0, 1, 2].map((i) => `<i class="${i < power.charges ? 'filled' : ''}"></i>`).join('')}</span></span></button>`;
+      const buttonDisabled = isOther || (disabled || power.charges === 0) || waiting;
+      return `<button class="power-card class-power-card${isOther ? ' dimmed' : ''}${waiting ? ' dimmed' : ''}" data-card="classPower" data-index="${g.index}" ${buttonDisabled ? 'disabled' : ''} title="${cls.description}"><span class="card-art">${cls.icon}</span><span><b>${cls.name}</b><small>${ready ? `Poder: ${cls.description}` : `Próxima carga em ${power.cooldown} rodada(s)`}</small><span class="charge-dots" role="img" aria-label="${power.charges} de 3 cargas">${[0, 1, 2].map((i) => `<i class="${i < power.charges ? 'filled' : ''}"></i>`).join('')}</span></span></button>`;
     }
     const id = g.id;
-    const buttonDisabled = isOther || (disabled || id === 'counterspell');
-    return `<button class="power-card card-stack${isOther ? ' dimmed' : ''}" data-card="${id}" data-index="${g.index}" ${buttonDisabled ? 'disabled' : ''} data-stack="${g.count}"><span class="card-art">${cardInfo[id].icon}</span><span><b>${cardInfo[id].name}</b><small>${id === 'counterspell' ? 'Resposta automática quando o outro lado usar uma carta.' : cardInfo[id].desc}</small></span></button>`;
+    const buttonDisabled = isOther || (disabled || id === 'counterspell') || waiting;
+    return `<button class="power-card card-stack${isOther ? ' dimmed' : ''}${waiting ? ' dimmed' : ''}" data-card="${id}" data-index="${g.index}" ${buttonDisabled ? 'disabled' : ''} data-stack="${g.count}"><span class="card-art">${cardInfo[id].icon}</span><span><b>${cardInfo[id].name}</b><small>${id === 'counterspell' ? 'Resposta automática quando o outro lado usar uma carta.' : cardInfo[id].desc}</small></span></button>`;
   });
   root.innerHTML =
     items.join('') ||
