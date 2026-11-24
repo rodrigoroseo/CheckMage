@@ -984,6 +984,8 @@ function render() {
   renderClassPortraits();
   const boardWrap = $('.board-wrap');
   if (boardWrap) boardWrap.classList.toggle('waiting', state.waitingForCounterspell);
+  const waitingOverlay = $('#waiting-overlay');
+  if (waitingOverlay) waitingOverlay.classList.toggle('hidden', !state.waitingForCounterspell);
 }
 function renderBoard() {
   const board = $('#board');
