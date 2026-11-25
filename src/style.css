@@ -359,7 +359,8 @@ p {
 .mechanic-group:has(.option-card input:not(:checked)) .option-card:has(input:not(:checked)) {
   opacity: 0.74;
 }
-.mechanic-group:has(#toggle-events:not(:checked)) .option-grid {
+.mechanic-group:has(#toggle-events:not(:checked)) .option-grid,
+.mechanic-group:has(#mp-toggle-events:not(:checked)) .option-grid {
   opacity: 0.36;
   pointer-events: none;
 }
@@ -2722,7 +2723,8 @@ body {
     0 1px 2px #17130e,
     0 0 8px #e5d29a88;
 }
-.setup-grid:has(#toggle-cards:not(:checked)) .mechanic-group:has(#toggle-cards) {
+.setup-grid:has(#toggle-cards:not(:checked)) .mechanic-group:has(#toggle-cards),
+.setup-grid:has(#mp-toggle-cards:not(:checked)) .mechanic-group:has(#mp-toggle-cards) {
   opacity: 0.42;
 }
 :root {
@@ -3751,7 +3753,9 @@ body {
   }
 }
 .setup-grid:has(#toggle-cards:not(:checked)) .card-icons,
-.setup-grid:has(#toggle-cards:not(:checked)) .class-config {
+.setup-grid:has(#toggle-cards:not(:checked)) .class-config,
+.setup-grid:has(#mp-toggle-cards:not(:checked)) .card-icons,
+.setup-grid:has(#mp-toggle-cards:not(:checked)) .class-config {
   opacity: 0.4;
   filter: grayscale(0.7);
 }
@@ -4276,32 +4280,38 @@ body {
   margin: 14px 0 0 46px;
   flex: none;
 }
-#classes-options .class-icons-row {
+#classes-options .class-icons-row,
+#mp-classes-options .class-icons-row {
   display: flex;
   align-items: center;
   gap: 14px;
   margin-top: 9px;
 }
-#classes-options #class-icons {
+#classes-options #class-icons,
+#mp-classes-options #mp-class-icons {
   flex: 1 1 auto;
   min-width: 0;
   margin: 0;
 }
-#classes-options .random-class {
+#classes-options .random-class,
+#mp-classes-options .random-class {
   flex: 0 0 185px;
   max-width: 185px;
   margin: 0;
   align-self: center;
 }
-#classes-options .class-selection-note {
+#classes-options .class-selection-note,
+#mp-classes-options .class-selection-note {
   margin-top: 9px;
 }
 @media (max-width: 760px) {
-  #classes-options .class-icons-row {
+  #classes-options .class-icons-row,
+  #mp-classes-options .class-icons-row {
     align-items: flex-start;
     gap: 9px;
   }
-  #classes-options .random-class {
+  #classes-options .random-class,
+  #mp-classes-options .random-class {
     flex-basis: 160px;
     max-width: 160px;
   }
@@ -4312,10 +4322,12 @@ body {
     max-width: none;
     margin-left: 0;
   }
-  #classes-options .class-icons-row {
+  #classes-options .class-icons-row,
+  #mp-classes-options .class-icons-row {
     flex-direction: column;
   }
-  #classes-options .random-class {
+  #classes-options .random-class,
+  #mp-classes-options .random-class {
     flex-basis: auto;
     max-width: none;
     align-self: stretch;
@@ -4395,122 +4407,81 @@ body {
   opacity: 0 !important;
 }
 
-/* Multiplayer lobby */
+/* Lobby multijogador: reaproveita o visual da tela de configurações (mode-card, mechanic-group, option-card...). */
 .multiplayer-options {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-  margin: 20px 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 15px 0 17px;
+  border-top: 1px solid var(--line);
 }
 .multiplayer-options .mode-card {
-  min-height: 80px;
-  padding: 14px;
-  border: 1px solid #b895ff40;
-  border-radius: 6px;
-  background: #b895ff10;
-  cursor: pointer;
   text-align: left;
 }
-.multiplayer-options .mode-card:hover {
-  border-color: #d9a952;
-  background: #d9a95220;
+.multiplayer-config,
+.room-creation,
+.room-join {
+  border-top: 1px solid var(--line);
 }
-.multiplayer-options .mode-card.selected {
-  border-color: #d9a952;
-  background: #d9a95220;
-  box-shadow: 0 0 12px #d9a95220;
+.group-label > .button {
+  margin-left: auto;
+  flex: 0 0 auto;
 }
-.multiplayer-options .mode-card .mode-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-.multiplayer-options .mode-card .mode-top span {
-  font-size: 18px;
-  color: #d9a952;
-}
-.multiplayer-options .mode-card .mode-tag {
-  font: 7px 'DM Mono', monospace;
-  letter-spacing: 0.13em;
-  color: #aaa;
-  padding: 2px 4px;
-  border-radius: 3px;
-  background: #d9a95215;
-  border: 1px solid #d9a95240;
-}
-.multiplayer-options .mode-card b {
-  display: block;
-  font-size: 12px;
-  font-weight: 700;
-  color: #e3d4af;
-  margin-bottom: 4px;
-}
-.multiplayer-options .mode-card small {
-  display: block;
-  font-size: 9px;
-  color: #a49b88;
-  line-height: 1.4;
-}
-
-.room-creation {
-  margin-top: 16px;
-  padding: 14px;
-  border: 1px solid #a78c5a36;
-  border-radius: 6px;
-  background: #201d16;
-}
-.room-code-display,
-.room-url-display {
+.room-field {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 10px;
-}
-.room-code-label {
-  font: 7px 'DM Mono', monospace;
-  letter-spacing: 0.12em;
-  color: #a49b88;
-  flex-shrink: 0;
+  margin: 14px 0 0 46px;
 }
 .room-code {
-  font: 700 18px 'DM Mono', monospace;
-  color: #e7d59b;
-  padding: 4px 8px;
-  border-radius: 4px;
-  background: #d9a95210;
-  letter-spacing: 0.15em;
+  flex: 1;
+  min-width: 0;
+  padding: 11px 14px;
+  border: 1px solid #bcaa7050;
+  border-radius: 5px;
+  background: linear-gradient(115deg, #e2c17412, #9d83dc09);
+  color: #f0d992;
+  font:
+    700 22px 'DM Mono',
+    monospace;
+  letter-spacing: 0.32em;
+  text-align: center;
+  user-select: all;
 }
 .room-url {
-  font: 10px 'DM Mono', monospace;
-  color: #b4a995;
-  padding: 6px 8px;
-  border: 1px solid #ffffff12;
-  border-radius: 3px;
-  background: #ffffff05;
   flex: 1;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid #ffffff0d;
+  border-radius: 5px;
+  background: #ffffff04;
+  color: #b4a995;
+  font:
+    11px 'DM Mono',
+    monospace;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.room-instructions {
-  font-size: 9px;
-  color: #928a7b;
-  margin-bottom: 10px;
-  line-height: 1.4;
+  user-select: all;
 }
 .room-status {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 10px;
-  color: #b9a87b;
+  gap: 10px;
+  margin: 14px 0 0 46px;
+  padding: 10px 12px;
+  border: 1px solid #d7a94d40;
+  border-radius: 5px;
+  background: #d9a9520a;
+  color: #e0c98f;
+  font-size: 11px;
 }
 .room-status-dot {
+  flex: 0 0 auto;
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #d9a952;
+  background: var(--lime);
   box-shadow: 0 0 6px #d9a95255;
   animation: room-pulse 1.5s ease-in-out infinite;
 }
@@ -4520,438 +4491,71 @@ body {
     opacity: 0.8;
   }
 }
-
-.room-join {
-  margin-top: 16px;
-  padding: 14px;
-  border: 1px solid #a78c5a36;
-  border-radius: 6px;
-  background: #201d16;
+.room-join-row {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  margin: 14px 0 0 46px;
 }
 .room-code-input {
-  width: 100%;
-  max-width: 200px;
-  padding: 10px;
-  border: 1px solid #a78c5a;
-  border-radius: 4px;
-  background: #17150f;
-  color: #e3d4af;
-  font: 700 20px 'DM Mono', monospace;
-  letter-spacing: 0.3em;
+  flex: 1;
+  min-width: 0;
+  max-width: 260px;
+  padding: 11px 14px;
+  border: 1px solid #bcaa7050;
+  border-radius: 5px;
+  background: #ffffff04;
+  color: #f0d992;
+  font:
+    700 20px 'DM Mono',
+    monospace;
+  letter-spacing: 0.32em;
   text-align: center;
   text-transform: uppercase;
+  transition: 0.15s;
 }
 .room-code-input::placeholder {
-  color: #6a6358;
-  font-size: 12px;
-  letter-spacing: 0.1em;
+  color: #6f6859;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+}
+.room-code-input:focus {
+  outline: none;
+  border-color: #d7c36b99;
+  background: #d9a9520c;
+  box-shadow: 0 0 0 1px #e4cf6520;
+}
+.room-join-row .button-start {
+  flex: 0 0 auto;
+  width: auto;
+  margin-top: 0;
+  gap: 22px;
 }
 .join-error {
-  font-size: 9px;
-  color: #ff6655;
-  margin-top: 6px;
+  margin: 10px 0 0 46px;
+  padding: 8px 10px;
+  border: 1px solid #f2534845;
+  border-radius: 5px;
+  background: #f253481a;
+  color: #ff9a92;
+  font-size: 10px;
 }
 
-/* Multiplayer config section */
-.multiplayer-config {
-  margin-top: 20px;
-  padding: 20px;
-  border: 1px solid #a78c5a36;
-  border-radius: 8px;
-  background: #201d16;
-}
-.multiplayer-config .section-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #ffffff10;
-}
-.multiplayer-config .section-heading .section-number {
-  font: 8px 'DM Mono', monospace;
-  color: #a49b88;
-  letter-spacing: 0.1em;
-}
-.multiplayer-config .section-heading h2 {
-  font: 700 16px 'Space Grotesk', sans-serif;
-  color: #e3d4af;
-  margin: 0;
-}
-.multiplayer-config .section-heading .section-hint {
-  font: 8px 'DM Mono', monospace;
-  color: #a49b88;
-  letter-spacing: 0.1em;
-  padding: 3px 6px;
-  border-radius: 3px;
-  background: #d9a95210;
-  border: 1px solid #d9a95220;
-}
-.multiplayer-config .mechanic-group {
-  margin-bottom: 16px;
-}
-.multiplayer-config .mechanic-group:last-child {
-  margin-bottom: 0;
-}
-.multiplayer-config .group-label {
+/* Estilos das opções (eventos, cartas, classes, modos) vêm das regras base da tela de configurações. */
+.mp-config-actions {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 10px;
+  padding: 17px 0 4px;
+  border-top: 1px solid var(--line);
 }
-.multiplayer-config .group-label .group-icon {
-  font-size: 16px;
-  color: #d9a952;
+.mp-config-actions .button {
+  padding: 12px 18px;
 }
-.multiplayer-config .group-label h3 {
-  font: 700 12px 'Space Grotesk', sans-serif;
-  color: #e3d4af;
-  margin: 0;
-}
-.multiplayer-config .group-label p {
-  font-size: 9px;
-  color: #a49b88;
-  margin: 0;
-}
-.multiplayer-config .option-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-}
-.multiplayer-config .option-card {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px;
-  border: 1px solid #ffffff10;
-  border-radius: 4px;
-  background: #ffffff05;
-  cursor: pointer;
-}
-.multiplayer-config .option-card:hover {
-  border-color: #d9a95240;
-  background: #d9a95210;
-}
-.multiplayer-config .option-card input[type='checkbox'] {
-  position: absolute;
-  opacity: 0;
-}
-.multiplayer-config .option-check {
-  width: 14px;
-  height: 14px;
-  border: 1px solid #a78c5a;
-  border-radius: 3px;
-  background: #17150f;
-  position: relative;
-  flex-shrink: 0;
-}
-.multiplayer-config .option-card input[type='checkbox']:checked + .option-check {
-  background: #d9a952;
-  border-color: #d9a952;
-}
-.multiplayer-config .option-card input[type='checkbox']:checked + .option-check::after {
-  content: '✓';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font: 700 10px 'DM Mono', monospace;
-  color: #17150f;
-}
-.multiplayer-config .option-symbol {
-  font-size: 16px;
-  color: #d9a952;
-  flex-shrink: 0;
-}
-.multiplayer-config .option-symbol.purple {
-  color: #b895ff;
-}
-.multiplayer-config .option-symbol.amber {
-  color: #d9a952;
-}
-.multiplayer-config .option-text {
-  font: 8px 'DM Mono', monospace;
-  color: #a49b88;
-  letter-spacing: 0.05em;
-}
-.multiplayer-config .option-text b {
-  display: block;
-  font: 700 10px 'Space Grotesk', sans-serif;
-  color: #e3d4af;
-  margin-bottom: 2px;
-}
-.multiplayer-config .option-text small {
-  display: block;
-  font-size: 8px;
-  color: #a49b88;
-}
-.multiplayer-config .card-preview-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 10px 0;
-  padding: 8px;
-  border-radius: 4px;
-  background: #ffffff05;
-  border: 1px solid #ffffff10;
-}
-.multiplayer-config .mini-card {
-  font-size: 14px;
-  color: #d9a952;
-}
-.multiplayer-config .card-preview-note {
-  font: 8px 'DM Mono', monospace;
-  color: #a49b88;
-}
-.multiplayer-config .mechanic-subtoggles {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 10px 0;
-}
-.multiplayer-config .mechanic-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  font: 8px 'DM Mono', monospace;
-  color: #a49b88;
-}
-.multiplayer-config .mechanic-toggle input[type='checkbox'] {
-  display: none;
-}
-.multiplayer-config .toggle-track {
-  width: 30px;
-  height: 16px;
-  border-radius: 8px;
-  background: #a78c5a30;
-  border: 1px solid #a78c5a50;
-  position: relative;
-  flex-shrink: 0;
-  cursor: pointer;
-}
-.multiplayer-config .mechanic-toggle input[type='checkbox']:checked + .toggle-track {
-  background: #d9a952;
-  border-color: #d9a952;
-}
-.multiplayer-config .toggle-track::after {
-  content: '';
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #a49b88;
-  transition: transform 0.2s;
-}
-.multiplayer-config .mechanic-toggle input[type='checkbox']:checked + .toggle-track::after {
-  transform: translateX(14px);
-  background: #17150f;
-}
-.multiplayer-config .card-icons {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
-  margin: 10px 0;
-}
-.multiplayer-config .card-icons .card-icon-toggle {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  padding: 6px;
-  border: 1px solid #ffffff10;
-  border-radius: 4px;
-  background: #ffffff05;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.multiplayer-config .card-icons .card-icon-toggle:hover {
-  border-color: #d9a95240;
-  background: #d9a95210;
-}
-.multiplayer-config .card-icons .card-icon-toggle.disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-.multiplayer-config .card-icons .card-icon-toggle span {
-  font-size: 14px;
-  color: #d9a952;
-}
-.multiplayer-config .card-icons .card-icon-toggle small {
-  font: 7px 'DM Mono', monospace;
-  color: #a49b88;
-  text-align: center;
-  line-height: 1.2;
-}
-.multiplayer-config .class-toggle-inline {
-  margin-top: 10px;
-  padding: 10px;
-  border-radius: 4px;
-  background: #ffffff05;
-  border: 1px solid #ffffff10;
-}
-.multiplayer-config .class-toggle-inline span:last-child {
-  font: 8px 'DM Mono', monospace;
-  color: #a49b88;
-  margin-left: auto;
-}
-.multiplayer-config .class-toggle-inline b {
-  display: block;
-  font: 700 10px 'Space Grotesk', sans-serif;
-  color: #e3d4af;
-  margin-bottom: 2px;
-}
-.multiplayer-config .class-toggle-inline small {
-  display: block;
-  font-size: 8px;
-  color: #a49b88;
-}
-.multiplayer-config .class-config {
-  margin-top: 10px;
-  padding: 10px;
-  border-radius: 4px;
-  background: #ffffff05;
-  border: 1px solid #ffffff10;
-}
-.multiplayer-config .class-icons-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.multiplayer-config .class-icons {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
-  flex: 1;
-}
-.multiplayer-config .class-icons .class-icon-toggle {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: 4px;
-  border: 1px solid #ffffff10;
-  border-radius: 3px;
-  background: #ffffff05;
-  cursor: pointer;
-}
-.multiplayer-config .class-icons .class-icon-toggle:hover {
-  border-color: #d9a95240;
-}
-.multiplayer-config .class-icons .class-icon-toggle.disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-.multiplayer-config .class-icons .class-icon-toggle span {
-  font: 700 10px 'Space Grotesk', sans-serif;
-  color: #e3d4af;
-  text-align: center;
-}
-.multiplayer-config .random-class {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  font: 8px 'DM Mono', monospace;
-  color: #a49b88;
-}
-.multiplayer-config .random-class b {
-  font: 700 9px 'Space Grotesk', sans-serif;
-  color: #e3d4af;
-}
-.multiplayer-config .random-class small {
-  font-size: 7px;
-  color: #a49b88;
-}
-.multiplayer-config .class-selection-note {
-  font: 7px 'DM Mono', monospace;
-  color: #928a7b;
-  margin-top: 8px;
-  padding: 6px;
-  border-radius: 3px;
-  background: #d9a95210;
-  border: 1px solid #d9a95220;
-}
-.multiplayer-config .mode-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-}
-.multiplayer-config .mode-grid .mode-card {
-  display: flex;
-  flex-direction: column;
-  padding: 8px;
-  border: 1px solid #ffffff10;
-  border-radius: 4px;
-  background: #ffffff05;
-  cursor: pointer;
-  text-align: left;
-  transition: all 0.15s;
-}
-.multiplayer-config .mode-grid .mode-card:hover {
-  border-color: #d9a95240;
-  background: #d9a95210;
-}
-.multiplayer-config .mode-grid .mode-card.selected {
-  border-color: #d9a952;
-  background: #d9a95220;
-  box-shadow: 0 0 10px #d9a95220;
-}
-.multiplayer-config .mode-grid .mode-card .mode-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 4px;
-}
-.multiplayer-config .mode-grid .mode-card .mode-top span {
-  font-size: 14px;
-  color: #d9a952;
-}
-.multiplayer-config .mode-grid .mode-card .mode-tag {
-  font: 6px 'DM Mono', monospace;
-  color: #a49b88;
-  padding: 1px 3px;
-  border-radius: 2px;
-  background: #d9a95210;
-}
-.multiplayer-config .mode-grid .mode-card b {
-  font: 700 9px 'Space Grotesk', sans-serif;
-  color: #e3d4af;
-  margin-bottom: 2px;
-}
-.multiplayer-config .mode-grid .mode-card small {
-  font: 7px 'DM Mono', monospace;
-  color: #a49b88;
-  line-height: 1.3;
-}
-.multiplayer-config .mp-config-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid #ffffff10;
-}
-
-@media (max-width: 600px) {
-  .multiplayer-options {
-    grid-template-columns: 1fr;
-  }
-  .multiplayer-options .mode-card {
-    min-height: 64px;
-    padding: 10px;
-  }
-  .multiplayer-config .option-grid,
-  .multiplayer-config .mode-grid,
-  .multiplayer-config .card-icons {
-    grid-template-columns: 1fr;
-  }
-  .multiplayer-config .class-icons {
-    grid-template-columns: repeat(4, 1fr);
-  }
+.mp-config-actions .button-start {
+  width: auto;
+  margin-top: 0;
+  gap: 22px;
 }
 
 /* === Ajustes de partida: ações, cancelar carta flutuante, espera de contramagia e escolha de classe === */
@@ -5078,4 +4682,29 @@ body {
   opacity: 0.45;
   filter: grayscale(1) brightness(0.7);
   cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+  .multiplayer-options {
+    grid-template-columns: 1fr;
+  }
+  .room-field,
+  .room-status,
+  .room-join-row,
+  .join-error {
+    margin-left: 0;
+  }
+  .room-join-row {
+    flex-direction: column;
+  }
+  .room-code-input {
+    max-width: none;
+  }
+  .room-code {
+    font-size: 18px;
+    letter-spacing: 0.22em;
+  }
+  .mp-config-actions {
+    flex-wrap: wrap;
+  }
 }

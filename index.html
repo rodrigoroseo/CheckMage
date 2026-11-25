@@ -77,11 +77,23 @@
                 <span class="section-hint">SEM CONTA · SEM REGISTRO</span>
               </div>
               <div class="multiplayer-options">
-                <button id="create-room" class="mode-card selected" type="button" data-mode="create">
+                <button
+                  id="create-room"
+                  class="mode-card"
+                  type="button"
+                  data-mode="create"
+                  aria-pressed="false"
+                >
                   <span class="mode-top"><span>✦</span><span class="mode-tag">CRIAR</span></span>
                   <b>Nova sala</b><small>Configure as regras e crie a sala para compartilhar.</small>
                 </button>
-                <button id="join-room" class="mode-card" type="button" data-mode="join">
+                <button
+                  id="join-room"
+                  class="mode-card"
+                  type="button"
+                  data-mode="join"
+                  aria-pressed="false"
+                >
                   <span class="mode-top"><span>⇄</span><span class="mode-tag">ENTRAR</span></span>
                   <b>Juntar-se a uma sala</b><small>Digite o código de 6 dígitos de outro jogador.</small>
                 </button>
@@ -296,28 +308,86 @@
                 </div>
               </div>
               <div id="room-creation" class="room-creation hidden">
-                <div class="room-code-display">
-                  <span class="room-code-label">CÓDIGO DA SALA</span>
-                  <span id="room-code" class="room-code">--------</span>
-                  <button id="copy-code" class="button button-quiet" type="button">Copiar</button>
+                <div class="section-heading">
+                  <div>
+                    <span class="section-number">02</span>
+                    <h2>Sala criada</h2>
+                  </div>
+                  <span class="section-hint">COMPARTILHE COM SEU ADVERSÁRIO</span>
                 </div>
-                <div class="room-url-display">
-                  <span class="room-code-label">LINK DIRETO</span>
-                  <span id="room-url" class="room-url">—</span>
-                  <button id="copy-url" class="button button-quiet" type="button">Copiar</button>
+                <div class="mechanic-group">
+                  <div class="group-label">
+                    <span class="group-icon icon-event">#</span>
+                    <div>
+                      <h3>Código da sala</h3>
+                      <p>Seu adversário digita este código em “Juntar-se a uma sala”.</p>
+                    </div>
+                    <button id="copy-code" class="button button-quiet" type="button">Copiar</button>
+                  </div>
+                  <div class="room-field">
+                    <span id="room-code" class="room-code">------</span>
+                  </div>
                 </div>
-                <p class="room-instructions">
-                  Envie o código ou o link para seu adversário. Quando ele entrar, a partida começa.
-                </p>
-                <div class="room-status" id="room-status">
-                  <span class="room-status-dot"></span>
-                  <span>Aguardando o segundo jogador...</span>
+                <div class="mechanic-group">
+                  <div class="group-label">
+                    <span class="group-icon icon-card">⇗</span>
+                    <div>
+                      <h3>Link direto</h3>
+                      <p>Quem abrir o link entra na sala automaticamente.</p>
+                    </div>
+                    <button id="copy-url" class="button button-quiet" type="button">Copiar</button>
+                  </div>
+                  <div class="room-field">
+                    <span id="room-url" class="room-url">—</span>
+                  </div>
+                </div>
+                <div class="mechanic-group last-group">
+                  <div class="group-label">
+                    <span class="group-icon icon-mode">◌</span>
+                    <div>
+                      <h3>Status da sala</h3>
+                      <p>A partida começa assim que o segundo jogador entrar.</p>
+                    </div>
+                  </div>
+                  <div class="room-status" id="room-status">
+                    <span class="room-status-dot"></span>
+                    <span>Aguardando o segundo jogador...</span>
+                  </div>
                 </div>
               </div>
               <div id="room-join" class="room-join hidden">
-                <input id="room-code-input" type="text" maxlength="6" placeholder="CÓDIGO DA SALA" class="room-code-input" />
-                <button id="join-submit" class="button button-start" type="button">Entrar na sala</button>
-                <p id="join-error" class="join-error hidden">Sala não encontrada ou já está cheia.</p>
+                <div class="section-heading">
+                  <div>
+                    <span class="section-number">02</span>
+                    <h2>Entrar em uma sala</h2>
+                  </div>
+                  <span class="section-hint">CÓDIGO DE 6 DÍGITOS</span>
+                </div>
+                <div class="mechanic-group last-group">
+                  <div class="group-label">
+                    <span class="group-icon icon-card">⇄</span>
+                    <div>
+                      <h3>Código da sala</h3>
+                      <p>Peça o código (ou o link) a quem criou a sala.</p>
+                    </div>
+                  </div>
+                  <div class="room-join-row">
+                    <input
+                      id="room-code-input"
+                      class="room-code-input"
+                      type="text"
+                      maxlength="6"
+                      placeholder="CÓDIGO"
+                      autocomplete="off"
+                      spellcheck="false"
+                      aria-label="Código da sala"
+                    />
+                    <button id="join-submit" class="button button-start" type="button">
+                      Entrar na sala <span>↗</span>
+                    </button>
+                  </div>
+                  <p id="join-error" class="join-error hidden">Sala não encontrada ou já está cheia.</p>
+                </div>
               </div>
             </div>
             <aside class="setup-aside">

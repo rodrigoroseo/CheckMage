@@ -4494,7 +4494,23 @@ function showMultiplayer() {
   $('#setup-screen').classList.add('hidden');
   $('#game-screen').classList.add('hidden');
   $('#multiplayer-screen').classList.remove('hidden');
+  setLobbyChoice(null);
+  for (const id of ['#multiplayer-config', '#room-creation', '#room-join'])
+    $(id)?.classList.add('hidden');
   startAmbient('setup');
+}
+/* Marca qual cartão do lobby (criar/entrar) está ativo, como nos modos da tela de configurações. */
+function setLobbyChoice(which) {
+  for (const [id, key] of [
+    ['#create-room', 'create'],
+    ['#join-room', 'join'],
+  ]) {
+    const button = $(id);
+    if (!button) continue;
+    const on = key === which;
+    button.classList.toggle('selected', on);
+    button.setAttribute('aria-pressed', String(on));
+  }
 }
 function showSetupFromMultiplayer() {
   if (MP.ws) MP.ws.close();
@@ -4725,14 +4741,14 @@ function syncMPOptions() {
   if (mpRandomClasses) mpRandomClasses.disabled = !mpClassOn;
   if (mpToggleIndividualCards) mpToggleIndividualCards.disabled = !mpGlobalOn;
   if (mpToggleClasses) mpToggleClasses.disabled = !mpGlobalOn;
-  document.querySelectorAll('#multiplayer-config input[name="mp-event"]').forEach((input) => {
-    const group = input.closest('.mechanic-group');
-    if (group) group.style.opacity = input.checked ? '1' : '0.4';
-  });
+  // Mesmo comportamento da tela de configurações
+  $('.mechanic-group:has(#mp-toggle-cards) .card-preview-row')?.classList.toggle(
+    'disabled-options',
+    !mpCardOn,
+  );
 }
 $('#mp-toggle-events').addEventListener('change', (e) => {
-  const group = e.target.closest('.mechanic-group');
-  if (group) group.style.opacity = e.target.checked ? '1' : '0.4';
+  $('#mp-events-options').style.opacity = e.target.checked ? '1' : '.4';
 });
 $('#mp-toggle-cards').addEventListener('change', syncMPOptions);
 $('#mp-toggle-individual-cards').addEventListener('change', syncMPOptions);
@@ -4880,16 +4896,19 @@ function initMultiplayer() {
     }),
   );
   $('#create-room').addEventListener('click', () => {
+    setLobbyChoice('create');
     // Mostrar as opções de configuração de jogo antes de criar a sala
     $('#room-creation').classList.add('hidden');
     $('#room-join').classList.add('hidden');
     $('#multiplayer-config').classList.remove('hidden');
   });
   $('#join-room').addEventListener('click', () => {
+    setLobbyChoice('join');
     $('#room-creation').classList.add('hidden');
     $('#room-join').classList.remove('hidden');
     $('#multiplayer-config').classList.add('hidden');
     $('#join-error').classList.add('hidden');
+    $('#room-code-input').focus();
   });
   $('#mp-create-confirm').addEventListener('click', () => {
     // Criar a sala com as regras selecionadas
@@ -4912,6 +4931,7 @@ function initMultiplayer() {
       .catch(() => toast('Erro ao criar sala. Tente novamente.'));
   });
   $('#mp-create-cancel').addEventListener('click', () => {
+    setLobbyChoice(null);
     $('#multiplayer-config').classList.add('hidden');
     $('#room-creation').classList.add('hidden');
     $('#room-join').classList.add('hidden');
@@ -4927,6 +4947,9 @@ function initMultiplayer() {
     }
     $('#join-error').classList.add('hidden');
     joinRoom(code);
+  });
+  $('#room-code-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') $('#join-submit').click();
   });
   $('#back-multiplayer').addEventListener('click', showSetupFromMultiplayer);
 
