@@ -645,17 +645,30 @@ function renderClassDraft() {
   root.classList.toggle('hidden', !draft);
   $('#board').classList.toggle('board-draft-dim', Boolean(draft));
   if (!draft) return;
-  const side = Object.keys(draft.picks)[0] || 'w';
+  const isMulti = MP.connected;
+  const side = isMulti
+    ? Object.keys(draft.picks)[0] || MP.side || 'w'
+    : draft.step === 0
+      ? 'w'
+      : 'b';
   const label = side === 'w' ? 'Brancas' : 'Pretas';
   const selected = draft.picks[side];
-  const isMulti = MP.connected;
+  // Multiplayer: depois de confirmar, a escolha fica travada até o oponente escolher a dele.
+  const locked = isMulti && Boolean(state.classes[side]);
+  root.classList.toggle('locked', locked);
   root.innerHTML =
     '<div class="draft-kicker">ESCOLHA DE CLASSE</div><h2 id="class-draft-title">' +
-    label +
-    ', escolha sua classe</h2><p>' +
-    (isMulti
-      ? 'Escolha o poder do seu lado antes de começar.'
-      : 'Cada lado define seu próprio poder antes do primeiro lance.') +
+    (locked ? 'Classe escolhida!' : label + ', escolha sua classe') +
+    '</h2>' +
+    (locked
+      ? '<div class="draft-status" role="status"><span class="draft-spinner"></span><span>Aguardando o oponente escolher a classe dele…</span></div>'
+      : '') +
+    '<p>' +
+    (locked
+      ? 'Sua escolha está confirmada e não pode ser alterada.'
+      : isMulti
+        ? 'Escolha o poder do seu lado antes de começar.'
+        : 'Cada lado define seu próprio poder antes do primeiro lance.') +
     '</p><div class="draft-classes">' +
     state.enabledClasses
       .map((id) => {
@@ -663,11 +676,14 @@ function renderClassDraft() {
         return (
           '<button type="button" class="draft-class' +
           (selected === id ? ' selected' : '') +
+          (locked ? (selected === id ? ' chosen' : ' locked-out') : '') +
           '" data-draft-class="' +
           id +
           '" aria-pressed="' +
           (selected === id) +
-          '"><span>' +
+          '"' +
+          (locked ? ' disabled' : '') +
+          '><span>' +
           cls.icon +
           '</span><b>' +
           cls.name +
@@ -678,19 +694,27 @@ function renderClassDraft() {
       })
       .join('') +
     '</div><div class="draft-actions"><button type="button" class="button" id="draft-cancel">Cancelar</button><button type="button" class="button button-start" id="draft-confirm" ' +
-    (selected ? '' : 'disabled') +
+    (selected && !locked ? '' : 'disabled') +
     '>' +
-    (isMulti ? 'Confirmar' : draft.step === 0 ? 'Confirmar Brancas' : 'Iniciar partida') +
-    ' <span>↗</span></button></div>';
+    (locked
+      ? 'Aguardando oponente…'
+      : isMulti
+        ? 'Confirmar'
+        : draft.step === 0
+          ? 'Confirmar Brancas'
+          : 'Iniciar partida') +
+    (locked ? '' : ' <span>↗</span>') +
+    '</button></div>';
   $$('[data-draft-class]', root).forEach((button) =>
     button.addEventListener('click', () => {
+      if (locked) return;
       draft.picks[side] = button.dataset.draftClass;
       renderClassDraft();
     }),
   );
-  $('#draft-cancel', root).addEventListener('click', showSetup);
+  $('#draft-cancel', root).addEventListener('click', () => confirmLeave(goSetup));
   $('#draft-confirm', root).addEventListener('click', () => {
-    if (!draft.picks[side]) return;
+    if (!draft.picks[side] || locked) return;
     if (isMulti) {
       state.classes[side] = draft.picks[side];
       MP.ws &&
@@ -896,6 +920,10 @@ function hasInitialCardTarget(id, side) {
   return true;
 }
 function useClassPower(index, skipCounterspell = false) {
+  if (state.waitingForCounterspell) {
+    toast('Aguarde a resposta do adversário.');
+    return;
+  }
   if (state.motion) {
     toast('Aguarde a peça concluir o movimento.');
     return;
@@ -986,6 +1014,11 @@ function render() {
   if (boardWrap) boardWrap.classList.toggle('waiting', state.waitingForCounterspell);
   const waitingOverlay = $('#waiting-overlay');
   if (waitingOverlay) waitingOverlay.classList.toggle('hidden', !state.waitingForCounterspell);
+  // Desistir e sugerir empate só existem com a partida em andamento
+  for (const id of ['#draw-btn', '#resign-btn']) {
+    const btn = $(id);
+    if (btn) btn.disabled = !matchActionsAvailable();
+  }
 }
 function renderBoard() {
   const board = $('#board');
@@ -1009,7 +1042,8 @@ function renderBoard() {
       el.type = 'button';
       el.className = `square ${(f + r) % 2 ? 'dark' : 'light'}`;
       el.dataset.square = s;
-      el.style.setProperty('--rank', String(r));
+      /* --rank guarda a linha visual (0 = base da tela): com o tabuleiro girado, os sprites de baixo continuam sobrepondo os de cima. */
+      el.style.setProperty('--rank', String(flipped ? 7 - r : r));
       el.style.setProperty('--grain-x', `${((f % 4) / 3) * 100}%`);
       el.style.setProperty('--grain-y', `${(((7 - r) % 4) / 3) * 100}%`);
       el.setAttribute('role', 'gridcell');
@@ -1048,7 +1082,8 @@ function renderBoard() {
         rank.textContent = String(r + 1);
         el.append(rank);
       }
-      if (r === 0) {
+      /* Coordenadas das colunas (a–h) sempre na borda inferior visível do tabuleiro. */
+      if (flipped ? r === 7 : r === 0) {
         const file = document.createElement('span');
         file.className = 'coordinate file-label';
         file.textContent = 'abcdefgh'[f];
@@ -1354,7 +1389,7 @@ function renderClassPortraits() {
     el.title = ready
       ? `${classInfo[cls].name} · ${classInfo[cls].description} · Ativar`
       : `${classInfo[cls].name} · ${classInfo[cls].description} · Carga em ${power.cooldown} rodada(s)`;
-    el.disabled = !ready;
+    el.disabled = !ready || state.waitingForCounterspell;
     el.onclick = () => {
       if (state.waitingForCounterspell || state.pendingCard) {
         toast('Aguarde a resposta da Contramagia antes de usar outro poder.');
@@ -1405,17 +1440,20 @@ function renderHand() {
   const disabled = state.cardsUsed[c];
   const isOther = c !== turn;
   const waiting = state.waitingForCounterspell;
+  // Cartas apagadas = as do oponente (relativo à tela). Em partida local, o jogador é o da vez.
+  const viewerSide = MP.connected ? MP.side || 'w' : turn;
+  const dimmed = c !== viewerSide;
   const items = groups.map((g) => {
     if (g.kind === 'single') {
       const cls = classInfo[state.classes[c]],
         power = state.classPower[c],
         ready = power.charges > 0;
       const buttonDisabled = isOther || (disabled || power.charges === 0) || waiting;
-      return `<button class="power-card class-power-card${isOther ? ' dimmed' : ''}${waiting ? ' dimmed' : ''}" data-card="classPower" data-index="${g.index}" ${buttonDisabled ? 'disabled' : ''} title="${cls.description}"><span class="card-art">${cls.icon}</span><span><b>${cls.name}</b><small>${ready ? `Poder: ${cls.description}` : `Próxima carga em ${power.cooldown} rodada(s)`}</small><span class="charge-dots" role="img" aria-label="${power.charges} de 3 cargas">${[0, 1, 2].map((i) => `<i class="${i < power.charges ? 'filled' : ''}"></i>`).join('')}</span></span></button>`;
+      return `<button class="power-card class-power-card${dimmed || waiting ? ' dimmed' : ''}" data-card="classPower" data-index="${g.index}" ${buttonDisabled ? 'disabled' : ''} title="${cls.description}"><span class="card-art">${cls.icon}</span><span><b>${cls.name}</b><small>${ready ? `Poder: ${cls.description}` : `Próxima carga em ${power.cooldown} rodada(s)`}</small><span class="charge-dots" role="img" aria-label="${power.charges} de 3 cargas">${[0, 1, 2].map((i) => `<i class="${i < power.charges ? 'filled' : ''}"></i>`).join('')}</span></span></button>`;
     }
     const id = g.id;
     const buttonDisabled = isOther || (disabled || id === 'counterspell') || waiting;
-    return `<button class="power-card card-stack${isOther ? ' dimmed' : ''}${waiting ? ' dimmed' : ''}" data-card="${id}" data-index="${g.index}" ${buttonDisabled ? 'disabled' : ''} data-stack="${g.count}"><span class="card-art">${cardInfo[id].icon}</span><span><b>${cardInfo[id].name}</b><small>${id === 'counterspell' ? 'Resposta automática quando o outro lado usar uma carta.' : cardInfo[id].desc}</small></span></button>`;
+    return `<button class="power-card card-stack${dimmed || waiting ? ' dimmed' : ''}" data-card="${id}" data-index="${g.index}" ${buttonDisabled ? 'disabled' : ''} data-stack="${g.count}"><span class="card-art">${cardInfo[id].icon}</span><span><b>${cardInfo[id].name}</b><small>${id === 'counterspell' ? 'Resposta automática quando o outro lado usar uma carta.' : cardInfo[id].desc}</small></span></button>`;
   });
   root.innerHTML =
     items.join('') ||
@@ -2627,8 +2665,8 @@ function finishCheckmate() {
   playSound('mate');
   const winner = state.game.turn() === 'w' ? 'Pretas' : 'Brancas';
   showModal('XEQUE-MATE', `${winner} venceram por xeque-mate!`, '', [
-    { label: 'Jogar novamente', primary: true, fn: newGame },
-    { label: 'Voltar à configuração', fn: showSetup },
+    { label: 'Jogar novamente', primary: true, fn: playAgain },
+    { label: 'Voltar à configuração', fn: goSetup },
   ]);
 }
 function rescueOptions(side) {
@@ -2747,16 +2785,16 @@ function checkEnd() {
     state.ended = true;
     playSound('draw');
     showModal('PARTIDA ENCERRADA', 'Empate!', '', [
-      { label: 'Jogar novamente', primary: true, fn: newGame },
-      { label: 'Voltar à configuração', fn: showSetup },
+      { label: 'Jogar novamente', primary: true, fn: playAgain },
+      { label: 'Voltar à configuração', fn: goSetup },
     ]);
   } else if (state.ended && !state.game.isGameOver()) {
     playSound('mate');
     setTimeout(
       () =>
         showModal('REI CAPTURADO', 'Uma captura decisiva encerrou a partida.', '', [
-          { label: 'Jogar novamente', primary: true, fn: newGame },
-          { label: 'Voltar à configuração', fn: showSetup },
+          { label: 'Jogar novamente', primary: true, fn: playAgain },
+          { label: 'Voltar à configuração', fn: goSetup },
         ]),
       100,
     );
@@ -2933,7 +2971,11 @@ if (ev === 'swap') {
   prepareEventForecast();
 }
 function useCard(i, skipCounterspell = false, forcedId = null, classPower = false) {
-  if ((!state.opts.cards && !classPower) || state.classDraft) return;
+  if ((!state.opts.cards && !classPower) || state.classDraft || state.ended) return;
+  if (state.waitingForCounterspell) {
+    toast('Aguarde a resposta do adversário.');
+    return;
+  }
   if (state.motion) {
     toast('Aguarde a peça concluir o movimento.');
     return;
@@ -3406,6 +3448,8 @@ function cardTarget(s, fromServer = false) {
     if (!state.waitingForCounterspell) {
       mpSendCardPlay(c, s);
       state.waitingForCounterspell = true;
+      // Apaga tabuleiro, retratos e cartas imediatamente, sem esperar a resposta do servidor
+      render();
     }
     return;
   } else if (finalTarget && !fromServer && offerCounterspell(c, s)) return;
@@ -3788,6 +3832,279 @@ function toast(msg) {
   document.body.append(t);
   setTimeout(() => t.remove(), 2600);
 }
+// === Saída da partida, reinício, desistência e empate ===
+const sideName = (side) => (side === 'w' ? 'Brancas' : 'Pretas');
+function gameScreenVisible() {
+  const screen = $('#game-screen');
+  return Boolean(state.game && screen && !screen.classList.contains('hidden'));
+}
+/* Partida em andamento = tela de jogo aberta e ainda sem resultado. Na escolha de classe local
+   não há nada a perder; no multijogador já existe um adversário na sala. */
+function matchInProgress() {
+  if (!gameScreenVisible() || state.ended) return false;
+  return MP.connected || !state.classDraft;
+}
+function matchActionsAvailable() {
+  return Boolean(state.game) && !state.ended && !state.classDraft;
+}
+function leaveMatchConnection() {
+  if (MP.ws) {
+    MP.ws.onclose = null;
+    try {
+      MP.ws.close();
+    } catch {}
+  }
+  MP.ws = null;
+  MP.connected = false;
+  MP.opponentJoined = false;
+  MP.side = null;
+  MP.player = null;
+  MP.serverHands = null;
+  MP.serverClasses = null;
+  state.requestModal = null;
+  state.waitingForCounterspell = false;
+  state.counterspellPending = null;
+}
+function goSetup() {
+  leaveMatchConnection();
+  showSetup();
+}
+function topNewGame() {
+  if (gameScreenVisible() && MP.connected) {
+    goSetup();
+    return;
+  }
+  if (state.game) newGame();
+  else showSetup();
+}
+/* Qualquer ação que leve para outra tela pede confirmação enquanto há partida em andamento. */
+function confirmLeave(action, confirmLabel = 'Sair') {
+  if (!matchInProgress()) {
+    action();
+    return;
+  }
+  showModal(
+    'SAIR DA PARTIDA',
+    'Deseja sair da partida?',
+    MP.connected
+      ? 'A partida em andamento será encerrada para os dois jogadores.'
+      : 'A partida em andamento será perdida.',
+    [
+      { label: 'Continuar jogando', primary: true, fn: () => {} },
+      { label: confirmLabel, fn: action },
+    ],
+  );
+}
+/* Fechar a aba/navegador: o navegador mostra a confirmação nativa (não permite texto ou botões próprios). */
+window.addEventListener('beforeunload', (e) => {
+  if (state.allowUnload || !matchInProgress()) return;
+  e.preventDefault();
+  e.returnValue = '';
+});
+/* Links internos que abrem outra página (ex.: créditos) também pedem confirmação durante a partida. */
+document.addEventListener('click', (e) => {
+  const link = e.target.closest && e.target.closest('a[href]');
+  if (!link || !matchInProgress()) return;
+  const href = link.getAttribute('href') || '';
+  if (link.target === '_blank' || href.startsWith('#') || e.defaultPrevented) return;
+  e.preventDefault();
+  confirmLeave(() => {
+    leaveMatchConnection();
+    state.allowUnload = true;
+    location.href = href;
+  });
+});
+function playAgain() {
+  if (MP.connected) requestRestart(true);
+  else newGame();
+}
+/* Partida local: os dois jogadores dividem a tela, então cada um confirma em sequência. */
+function localConfirmBoth(kicker, firstQuestion, secondQuestion, onAccept, declinedMessage) {
+  const first = state.game.turn();
+  const second = first === 'w' ? 'b' : 'w';
+  const subtitle = 'Os dois jogadores precisam concordar.';
+  const declined = () => toast(declinedMessage);
+  showModal(kicker, `${sideName(first)}: ${firstQuestion}`, subtitle, [
+    { label: 'Cancelar', fn: declined },
+    {
+      label: 'Sim',
+      primary: true,
+      fn: () =>
+        showModal(kicker, `${sideName(second)}: ${secondQuestion}`, subtitle, [
+          { label: 'Não', fn: declined },
+          { label: 'Sim', primary: true, fn: onAccept },
+        ]),
+    },
+  ]);
+}
+function requestRestart(skipConfirm = false) {
+  if (!state.game || !gameScreenVisible()) return;
+  if (MP.connected) {
+    if (skipConfirm) {
+      mpSendRequest('restart');
+      return;
+    }
+    showModal(
+      'REINICIAR PARTIDA',
+      'Pedir para reiniciar a partida?',
+      'O adversário também precisa aceitar. Se um dos dois recusar, a partida continua.',
+      [
+        { label: 'Cancelar', fn: () => {} },
+        { label: 'Pedir reinício', primary: true, fn: () => mpSendRequest('restart') },
+      ],
+    );
+    return;
+  }
+  localConfirmBoth(
+    'REINICIAR PARTIDA',
+    'Reiniciar a partida?',
+    'Aceita reiniciar a partida?',
+    newGame,
+    'Reinício recusado. A partida continua.',
+  );
+}
+function requestDraw() {
+  if (!matchActionsAvailable()) return;
+  if (MP.connected) {
+    showModal(
+      'SUGERIR EMPATE',
+      'Sugerir empate ao adversário?',
+      'O adversário precisa aceitar. Se ele recusar, a partida continua normalmente.',
+      [
+        { label: 'Cancelar', fn: () => {} },
+        { label: 'Sugerir empate', primary: true, fn: () => mpSendRequest('draw') },
+      ],
+    );
+    return;
+  }
+  localConfirmBoth(
+    'SUGERIR EMPATE',
+    'Sugerir empate?',
+    'Aceita o empate?',
+    () => finishGame({ type: 'draw' }),
+    'Empate recusado. A partida continua.',
+  );
+}
+function requestResign() {
+  if (!matchActionsAvailable()) return;
+  const side = MP.connected ? MP.side || 'w' : state.game.turn();
+  showModal('DESISTIR', 'Deseja desistir da partida?', `${sideName(side)} perderá a partida.`, [
+    { label: 'Continuar jogando', primary: true, fn: () => {} },
+    {
+      label: 'Desistir',
+      fn: () => {
+        if (!MP.connected) finishGame({ type: 'resign', loser: side });
+        else if (!mpSendResign()) toast('Sem conexão com a sala.');
+      },
+    },
+  ]);
+}
+/* Encerra a partida por desistência ou empate (local ou resultado vindo do servidor). */
+function finishGame(result) {
+  if (!state.game || state.ended) return;
+  state.ended = true;
+  state.pendingCard = null;
+  state.counterspellPending = null;
+  state.waitingForCounterspell = false;
+  state.selected = null;
+  state.legal = [];
+  if (state.promotionPending) clearPromotionMenu();
+  clearModal();
+  $('#card-selection')?.classList.add('hidden');
+  render();
+  const choices = [
+    { label: 'Jogar novamente', primary: true, fn: playAgain },
+    { label: 'Voltar à configuração', fn: goSetup },
+  ];
+  if (result.type === 'draw') {
+    playSound('draw');
+    showModal('EMPATE', 'Empate por acordo!', 'Os dois jogadores concordaram em encerrar a partida.', choices);
+    return;
+  }
+  playSound('mate');
+  const loser = result.loser || 'w';
+  showModal(
+    'DESISTÊNCIA',
+    `${sideName(loser === 'w' ? 'b' : 'w')} venceram!`,
+    `${sideName(loser)} desistiram da partida.`,
+    choices,
+  );
+}
+function mpSendRequest(kind) {
+  if (!MP.ws || MP.ws.readyState !== 1) {
+    toast('Sem conexão com a sala.');
+    return;
+  }
+  MP.ws.send(JSON.stringify({ type: 'request', kind }));
+  state.requestModal = { kind, role: 'requester' };
+  const restart = kind === 'restart';
+  showModal(
+    restart ? 'REINICIAR PARTIDA' : 'SUGERIR EMPATE',
+    'Aguardando o adversário…',
+    restart
+      ? 'Pedido de reinício enviado. A partida só reinicia se o adversário aceitar.'
+      : 'Sugestão de empate enviada. A partida só termina em empate se o adversário aceitar.',
+    [
+      {
+        label: 'Cancelar pedido',
+        fn: () => {
+          state.requestModal = null;
+          if (MP.ws && MP.ws.readyState === 1) MP.ws.send(JSON.stringify({ type: 'requestCancel' }));
+        },
+      },
+    ],
+  );
+}
+function mpSendRequestResponse(accepted) {
+  if (!MP.ws || MP.ws.readyState !== 1) return;
+  MP.ws.send(JSON.stringify({ type: 'requestResponse', accepted }));
+}
+function mpShowIncomingRequest(msg) {
+  const restart = msg.kind === 'restart';
+  state.requestModal = { kind: msg.kind, role: 'responder' };
+  showModal(
+    restart ? 'REINICIAR PARTIDA' : 'PROPOSTA DE EMPATE',
+    restart ? 'O adversário quer reiniciar a partida.' : 'O adversário sugere um empate.',
+    restart
+      ? 'Aceitar reiniciar? Se você recusar, a partida continua.'
+      : 'Aceitar o empate? Se você recusar, a partida continua.',
+    [
+      {
+        label: 'Recusar',
+        fn: () => {
+          state.requestModal = null;
+          mpSendRequestResponse(false);
+        },
+      },
+      {
+        label: 'Aceitar',
+        primary: true,
+        fn: () => {
+          state.requestModal = null;
+          mpSendRequestResponse(true);
+        },
+      },
+    ],
+  );
+}
+function mpHandleRequestResolved(msg) {
+  if (state.requestModal) clearModal();
+  state.requestModal = null;
+  const mine = msg.requester === MP.side;
+  const restart = msg.kind === 'restart';
+  if (msg.reason === 'declined') {
+    if (mine)
+      toast(
+        restart
+          ? 'O adversário recusou reiniciar a partida.'
+          : 'O adversário recusou o empate. A partida continua.',
+      );
+  } else if (msg.reason === 'cancelled') {
+    if (!mine) toast('O adversário cancelou o pedido.');
+  } else {
+    toast('O pedido expirou sem resposta.');
+  }
+}
 
 // === Multiplayer ===
 function mpProtocol() {
@@ -3839,7 +4156,11 @@ function mpHandleMessage(msg) {
       MP.side = msg.sides && msg.sides[MP.player - 1] ? msg.sides[MP.player - 1] : MP.side || 'w';
       MP.serverHands = msg.hands || { w: [], b: [] };
       MP.serverClasses = msg.classes || null;
-      toast('Partida começou!');
+      if (msg.restarted) {
+        clearModal();
+        state.requestModal = null;
+        toast('Partida reiniciada!');
+      } else toast('Partida começou!');
       startMultiplayerGame(msg.fen, msg.opts);
       if (msg.eventForecast) state.eventForecast = { type: msg.eventForecast.type, squares: [] };
       render();
@@ -3850,8 +4171,15 @@ function mpHandleMessage(msg) {
     case 'move':
       applyRemoteMove(msg.from, msg.to, msg.promotion, msg.fen, msg.captured, null, msg.piece, null);
       break;
-    case 'resign':
-      toast(`Jogador ${msg.player} resignou.`);
+    case 'gameOver':
+      state.requestModal = null;
+      finishGame(msg.reason === 'draw' ? { type: 'draw' } : { type: 'resign', loser: msg.loser });
+      break;
+    case 'request':
+      mpShowIncomingRequest(msg);
+      break;
+    case 'requestResolved':
+      mpHandleRequestResolved(msg);
       break;
     case 'counterspellExpired':
       // Tempo esgotado: o servidor resolveu a carta sem contramagia
@@ -3862,6 +4190,10 @@ function mpHandleMessage(msg) {
       break;
     case 'opponentLeft':
       toast('Adversário saiu da sala.');
+      if (state.requestModal) {
+        clearModal();
+        state.requestModal = null;
+      }
       if (state.waitingForCounterspell) {
         state.waitingForCounterspell = false;
         render();
@@ -3869,6 +4201,10 @@ function mpHandleMessage(msg) {
       break;
     case 'error':
       toast(msg.message || 'Erro na sala.');
+      if (state.requestModal) {
+        clearModal();
+        state.requestModal = null;
+      }
       // Evita ficar pausado esperando uma resposta que nunca virá
       if (state.waitingForCounterspell) {
         state.waitingForCounterspell = false;
@@ -4052,8 +4388,9 @@ function mpSendMove(from, to, promotion, fen, captured, san, piece, color) {
   MP.ws.send(JSON.stringify({ type: 'move', from, to, promotion, fen, captured: captured || null, san: san || null, piece: piece || null, color: color || null }));
 }
 function mpSendResign() {
-  if (!MP.ws || MP.ws.readyState !== 1) return;
+  if (!MP.ws || MP.ws.readyState !== 1) return false;
   MP.ws.send(JSON.stringify({ type: 'resign' }));
+  return true;
 }
 function mpSendClassPick(classId) {
   if (!MP.ws || MP.ws.readyState !== 1) return;
@@ -4442,22 +4779,18 @@ function keyHandler(e) {
       playSound('cancel');
       render();
     } else if (state.pendingCard) cancelCard();
-    else if (state.game)
-      showModal(
-        'NOVA PARTIDA',
-        'Reiniciar o tabuleiro?',
-        'O histórico e os eventos desta partida serão apagados.',
-        [
-          { label: 'Continuar jogando', fn: () => {} },
-          { label: 'Reiniciar', primary: true, fn: newGame },
-        ],
-      );
+    else if (state.game && matchInProgress() && !$('#modal-root').children.length)
+      requestRestart();
   }
 }
 $('#start-game').addEventListener('click', newGame);
-$('#new-game-top').addEventListener('click', () => (state.game ? newGame() : showSetup()));
-$('#restart-btn').addEventListener('click', newGame);
-$('#back-setup').addEventListener('click', showSetup);
+$('#new-game-top').addEventListener('click', () =>
+  confirmLeave(topNewGame, MP.connected ? 'Sair da sala' : 'Nova partida'),
+);
+$('#restart-btn').addEventListener('click', () => requestRestart());
+$('#draw-btn').addEventListener('click', requestDraw);
+$('#resign-btn').addEventListener('click', requestResign);
+$('#back-setup').addEventListener('click', () => confirmLeave(goSetup));
 $('#toggle-events').addEventListener(
   'change',
   (e) => ($('#events-options').style.opacity = e.target.checked ? '1' : '.4'),
@@ -4540,7 +4873,12 @@ document.addEventListener('keydown', keyHandler);
 
 // === Inicialização multiplayer ===
 function initMultiplayer() {
-  $('#multiplayer-btn').addEventListener('click', showMultiplayer);
+  $('#multiplayer-btn').addEventListener('click', () =>
+    confirmLeave(() => {
+      if (gameScreenVisible()) leaveMatchConnection();
+      showMultiplayer();
+    }),
+  );
   $('#create-room').addEventListener('click', () => {
     // Mostrar as opções de configuração de jogo antes de criar a sala
     $('#room-creation').classList.add('hidden');

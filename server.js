@@ -313,16 +313,31 @@ app.use(express.static(join(__dirname, 'dist')));
 
 // ... rest of file
 
-app.post('/api/rooms', (req, res) => {
-  const code = generateCode();
-  const room = {
-    code,
-    players: [],
+const REQUEST_TIMEOUT_MS = 30000;
+
+function clearPendingRequest(room) {
+  if (room.requestTimer) {
+    clearTimeout(room.requestTimer);
+    room.requestTimer = null;
+  }
+  room.pendingRequest = null;
+}
+
+// Encerra um pedido (reiniciar/empate) sem aceite e avisa os dois jogadores.
+function resolveRequestDeclined(room, reason) {
+  const req = room.pendingRequest;
+  if (!req) return;
+  clearPendingRequest(room);
+  broadcast(room, { type: 'requestResolved', kind: req.kind, accepted: false, reason, requester: req.from });
+}
+
+// Estado de jogo de uma sala (usado na criação e no reinício da partida).
+function createGameState(opts) {
+  return {
     turn: 'w',
     history: [],
     fen: START_FEN,
-    started: false,
-    opts: req.body || {},
+    opts,
     eventPly: 0,
     round: 1,
     eventType: null,
@@ -340,6 +355,65 @@ app.post('/api/rooms', (req, res) => {
     cardsUsed: { w: false, b: false },
     sacrificeUsed: { w: false, b: false },
     powerUsed: { w: false, b: false },
+  };
+}
+
+// Distribui as cartas iniciais e avisa os dois jogadores que a partida começou.
+function startRoomMatch(room, restarted) {
+  // Gerar cartas iniciais no servidor
+  const openingCards = generateOpeningCards(room.opts);
+  room.hands = openingCards;
+  const initialForecast = randomEventData(room.opts, room.fen);
+  const startMsg = {
+    type: 'start',
+    restarted: Boolean(restarted),
+    fen: room.fen,
+    turn: room.turn,
+    history: room.history,
+    round: room.round,
+    eventPly: room.eventPly,
+    eventType: room.eventType,
+    eventForecast: initialForecast ? { type: initialForecast.type } : null,
+    opts: room.opts,
+    sides: room.sides,
+    hands: room.hands,
+  };
+  // Se classes randômicas, escolher no servidor e enviar no início
+  if (room.opts?.randomClasses) {
+    const randomClass = pickRandom(room.opts.enabledClasses || []);
+    room.classes = { w: randomClass, b: randomClass };
+    startMsg.classes = room.classes;
+    room.opts.classes = { w: room.classes.w, b: room.classes.b };
+    room.hands = generateOpeningCards(room.opts);
+    room.classPower = { w: { charges: 1, cooldown: 0 }, b: { charges: 1, cooldown: 0 } };
+    startMsg.hands = room.hands;
+    startMsg.classPower = room.classPower;
+  }
+  if (initialForecast) room.eventForecast = initialForecast;
+  broadcast(room, startMsg);
+}
+
+// Reinicia a partida da sala mantendo jogadores, lados e regras originais.
+function restartRoom(room) {
+  clearPendingCard(room);
+  clearPendingRequest(room);
+  const opts = JSON.parse(JSON.stringify(room.baseOpts || {}));
+  Object.assign(room, createGameState(opts));
+  room.classPicks = null;
+  room.started = true;
+  room.lastActivity = Date.now();
+  startRoomMatch(room, true);
+}
+
+app.post('/api/rooms', (req, res) => {
+  const code = generateCode();
+  const baseOpts = req.body || {};
+  const room = {
+    code,
+    players: [],
+    started: false,
+    baseOpts: JSON.parse(JSON.stringify(baseOpts)),
+    ...createGameState(baseOpts),
   };
   rooms.set(code, room);
   res.json({ code, url: `${HOST}/room/${code}`, opts: req.body || {} });
@@ -389,36 +463,7 @@ wss.on('connection', (ws, req) => {
 
   if (room.players.length === 2) {
     room.started = true;
-    // Gerar cartas iniciais no servidor
-    const openingCards = generateOpeningCards(room.opts);
-    room.hands = openingCards;
-    const initialForecast = randomEventData(room.opts, room.fen);
-    let startMsg = {
-      type: 'start',
-      fen: room.fen,
-      turn: room.turn,
-      history: room.history,
-      round: room.round,
-      eventPly: room.eventPly,
-      eventType: room.eventType,
-      eventForecast: initialForecast ? { type: initialForecast.type } : null,
-      opts: room.opts,
-      sides: room.sides,
-      hands: room.hands,
-    };
-    // Se classes randômicas, escolher no servidor e enviar no início
-    if (room.opts?.randomClasses) {
-      const randomClass = pickRandom(room.opts.enabledClasses || []);
-      room.classes = { w: randomClass, b: randomClass };
-      startMsg.classes = room.classes;
-      room.opts.classes = { w: room.classes.w, b: room.classes.b };
-      room.hands = generateOpeningCards(room.opts);
-      room.classPower = { w: { charges: 1, cooldown: 0 }, b: { charges: 1, cooldown: 0 } };
-      startMsg.hands = room.hands;
-      startMsg.classPower = room.classPower;
-    }
-    if (initialForecast) room.eventForecast = initialForecast;
-    broadcast(room, startMsg);
+    startRoomMatch(room, false);
   }
 
   ws.on('message', (data) => {
@@ -502,8 +547,12 @@ wss.on('connection', (ws, req) => {
         });
         broadcast(room, buildStatePayload(room));
       } else if (msg.type === 'classPick') {
+        // O lado vem da conexão (não do cliente) e a escolha, depois de feita, não pode mudar
+        const pickSide = room.sides ? room.sides[room.players.indexOf(ws)] : null;
+        if (!pickSide || !msg.class) return;
         room.classPicks = room.classPicks || {};
-        room.classPicks[msg.side] = msg.class;
+        if (room.classPicks[pickSide]) return;
+        room.classPicks[pickSide] = msg.class;
         if (room.classPicks.w && room.classPicks.b) {
           room.classes.w = room.classPicks.w;
           room.classes.b = room.classPicks.b;
@@ -544,6 +593,10 @@ room.classPower = { w: { charges: 1, cooldown: 20 }, b: { charges: 1, cooldown: 
         }
         if (room.pendingCard) {
           ws.send(JSON.stringify({ type: 'error', message: 'Aguarde a resolução da carta anterior.' }));
+          return;
+        }
+        if (room.pendingRequest) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Aguarde a resposta do pedido pendente.' }));
           return;
         }
         // Verificar se o adversário (conectado) tem contramagia
@@ -599,11 +652,53 @@ room.classPower = { w: { charges: 1, cooldown: 20 }, b: { charges: 1, cooldown: 
           otherWs.send(JSON.stringify({ type: 'counterspellRequest', card: msg.card, target: msg.target, playerSide, isClassPower: !!msg.isClassPower, powerId: msg.powerId }));
         }
       } else if (msg.type === 'resign') {
-        broadcast(room, { type: 'resign', player: msg.player });
-      } else if (msg.type === 'drawOffer') {
-        broadcast(room, { type: 'drawOffer', player: msg.player });
-      } else if (msg.type === 'drawAccept') {
-        broadcast(room, { type: 'drawAccept' });
+        // Desistência: quem enviou perde; o lado vem da conexão
+        const loser = room.sides ? room.sides[room.players.indexOf(ws)] : null;
+        if (!loser || room.winner) return;
+        clearPendingCard(room);
+        clearPendingRequest(room);
+        room.winner = loser === 'w' ? 'b' : 'w';
+        broadcast(room, { type: 'gameOver', reason: 'resign', loser, winner: room.winner });
+      } else if (msg.type === 'request') {
+        // Pedido de reinício ou empate: o oponente precisa aceitar
+        const kind = msg.kind;
+        const from = room.sides ? room.sides[room.players.indexOf(ws)] : null;
+        if (!from || !['restart', 'draw'].includes(kind) || room.players.length < 2) return;
+        if (kind === 'draw' && room.winner) return;
+        if (room.pendingRequest) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Já existe um pedido aguardando resposta.' }));
+          return;
+        }
+        if (room.pendingCard) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Aguarde a resolução da carta em andamento.' }));
+          return;
+        }
+        const otherWs = room.players.find((p) => p !== ws);
+        if (!otherWs || otherWs.readyState !== 1) {
+          ws.send(JSON.stringify({ type: 'error', message: 'O adversário não está conectado.' }));
+          return;
+        }
+        room.pendingRequest = { kind, from, ws };
+        room.requestTimer = setTimeout(() => resolveRequestDeclined(room, 'expired'), REQUEST_TIMEOUT_MS);
+        otherWs.send(JSON.stringify({ type: 'request', kind, from }));
+      } else if (msg.type === 'requestResponse') {
+        const req = room.pendingRequest;
+        // Só o oponente de quem pediu pode responder
+        if (!req || req.ws === ws) return;
+        if (!msg.accepted) {
+          resolveRequestDeclined(room, 'declined');
+          return;
+        }
+        clearPendingRequest(room);
+        if (req.kind === 'restart') {
+          restartRoom(room);
+        } else {
+          broadcast(room, { type: 'gameOver', reason: 'draw' });
+        }
+      } else if (msg.type === 'requestCancel') {
+        const req = room.pendingRequest;
+        if (!req || req.ws !== ws) return;
+        resolveRequestDeclined(room, 'cancelled');
       } else if (msg.type === 'chat') {
         broadcast(room, { type: 'chat', player: msg.player, text: msg.text });
       }
@@ -617,6 +712,7 @@ room.classPower = { w: { charges: 1, cooldown: 20 }, b: { charges: 1, cooldown: 
     if (idx !== -1) {
       room.players.splice(idx, 1);
       clearPendingCard(room);
+      clearPendingRequest(room);
       if (room.players.length === 0) rooms.delete(room.code);
       else broadcast(room, { type: 'opponentLeft' });
     }

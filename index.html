@@ -586,6 +586,10 @@
             </div>
             <div class="game-actions">
               <button id="restart-btn" class="button button-quiet" type="button">↻ Reiniciar</button
+              ><button id="draw-btn" class="button button-quiet" type="button">
+                ½ Sugerir empate</button
+              ><button id="resign-btn" class="button button-quiet button-danger" type="button">
+                ⚑ Desistir</button
               ><button id="back-setup" class="button button-quiet" type="button">
                 ⚙ Configurar
               </button>
@@ -600,14 +604,16 @@
                 ><span class="turn-spacer"></span
                 ><span id="move-count" class="move-count">MOVIMENTO 01</span>
               </div>
-              <div id="card-selection" class="card-selection hidden">
-                <span id="card-selection-text"></span>
-                <div
-                  id="resurrection-choices"
-                  class="resurrection-choices hidden"
-                  aria-label="Escolha uma peça para ressuscitar"
-                ></div>
-                <button id="cancel-card" type="button">Cancelar carta <kbd>Esc</kbd></button>
+              <div class="card-selection-anchor">
+                <div id="card-selection" class="card-selection hidden">
+                  <span id="card-selection-text"></span>
+                  <div
+                    id="resurrection-choices"
+                    class="resurrection-choices hidden"
+                    aria-label="Escolha uma peça para ressuscitar"
+                  ></div>
+                  <button id="cancel-card" type="button">Cancelar carta <kbd>Esc</kbd></button>
+                </div>
               </div>
               <div class="board-wrap">
                 <div id="waiting-overlay" class="waiting-overlay hidden">
