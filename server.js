@@ -12,7 +12,16 @@ const server = createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws' });
 
 const PORT = process.env.PORT || 3000;
-const HOST = process.env.RENDER_HOST_URL || `http://localhost:${PORT}`;
+
+// URL pública do site: PUBLIC_URL (opcional) ou derivada da requisição, o que funciona atrás do proxy
+// do Render (https://checkmage.onrender.com) e também localmente (http://localhost:PORT).
+function publicBaseUrl(req) {
+  if (process.env.PUBLIC_URL) return process.env.PUBLIC_URL.replace(/\/+$/, '');
+  const first = (value) => String(value || '').split(',')[0].trim();
+  const proto = first(req.headers['x-forwarded-proto']) || req.protocol || 'http';
+  const host = first(req.headers['x-forwarded-host']) || req.headers.host || `localhost:${PORT}`;
+  return `${proto}://${host}`;
+}
 
 const rooms = new Map();
 
@@ -311,6 +320,11 @@ function resolvePendingCard(room, accepted, responderSide) {
 app.use(express.json());
 app.use(express.static(join(__dirname, 'dist')));
 
+// Link direto da sala (/room/CODIGO): serve a página principal; o cliente lê o código da URL e entra na sala.
+app.get('/room/:code', (req, res) => {
+  res.sendFile(join(__dirname, 'dist', 'index.html'));
+});
+
 // ... rest of file
 
 const REQUEST_TIMEOUT_MS = 30000;
@@ -416,7 +430,7 @@ app.post('/api/rooms', (req, res) => {
     ...createGameState(baseOpts),
   };
   rooms.set(code, room);
-  res.json({ code, url: `${HOST}/room/${code}`, opts: req.body || {} });
+  res.json({ code, url: `${publicBaseUrl(req)}/room/${code}`, opts: req.body || {} });
 });
 
 app.get('/api/rooms/:code', (req, res) => {

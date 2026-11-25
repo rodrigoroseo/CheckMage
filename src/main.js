@@ -4541,6 +4541,7 @@ function joinRoom(code) {
       return r.json();
     })
     .then((data) => {
+      if (data.players >= 2) throw new Error('Sala cheia');
       MP.room = data;
       $('#room-creation').classList.add('hidden');
       $('#room-join').classList.add('hidden');
@@ -4548,7 +4549,17 @@ function joinRoom(code) {
       $('#multiplayer-screen .hero-copy p').textContent = 'Conectando ao adversário...';
       mpConnect(code);
     })
-    .catch(() => {
+    .catch((err) => {
+      // Mostra o erro mesmo quando chegou por link direto (painel de entrada ainda oculto)
+      setLobbyChoice('join');
+      $('#multiplayer-config').classList.add('hidden');
+      $('#room-creation').classList.add('hidden');
+      $('#room-join').classList.remove('hidden');
+      $('#room-code-input').value = code;
+      $('#join-error').textContent =
+        err && err.message === 'Sala cheia'
+          ? 'Esta sala já está cheia.'
+          : 'Sala não encontrada. Confira o código ou o link.';
       $('#join-error').classList.remove('hidden');
     });
 }
@@ -4955,7 +4966,7 @@ function initMultiplayer() {
 
   // Rota /room/:CODE
   const path = location.pathname;
-  const m = path.match(/^\/room\/([A-Z0-9]{6})$/i);
+  const m = path.match(/^\/room\/([A-Z0-9]{6})\/?$/i);
   if (m) {
     const code = m[1].toUpperCase();
     showMultiplayer();
