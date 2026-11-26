@@ -1,8 +1,6 @@
 import express from 'express';
 import { WebSocketServer } from 'ws';
 import { createServer } from 'node:http';
-import { Chess } from 'chess.js';
-import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -23,6 +21,18 @@ function publicBaseUrl(req) {
   return `${proto}://${host}`;
 }
 
+/*
+ * Modelo do multijogador
+ * ----------------------
+ * - O servidor é a autoridade das MÃOS de cartas, cargas/recarga de poderes, contramagia, rodadas,
+ *   pedidos (reiniciar/empate), desistência e fim de jogo.
+ * - Os EFEITOS no tabuleiro (armadilhas, escudos, atordoados, bispos agendados, mortos, eventos,
+ *   roleta...) são calculados pelo cliente de quem jogou e enviados junto do lance ("fx") ou depois
+ *   do efeito de uma carta ("sync"). O servidor guarda o último fx e o reenvia em todo "state", para
+ *   os dois lados terminarem sempre com o mesmo estado.
+ * - O lado de cada jogador vem da conexão (ws.side), nunca de campos enviados pelo cliente.
+ */
+
 const rooms = new Map();
 
 const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
@@ -40,92 +50,16 @@ function pickRandom(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function parseSquare(s) {
-  return { f: 'abcdefgh'.indexOf(s[0]), r: Number(s[1]) - 1 };
-}
-
-function randomEventData(opts, fen) {
-  const available = opts?.eventTypes || [];
-  if (!available.length) return null;
-  const ev = pickRandom(available);
-  const data = { type: ev };
-  const holes = [];
-  const portals = [];
-  const mines = [];
-  const swaps = [];
-
-  const boardText = fen ? fen.split(' ')[0] : START_FEN;
-  const rows = boardText.split('/');
-  const pieces = {};
-  for (let r = 0; r < 8; r++) {
-    let f = 0;
-    for (const ch of rows[r]) {
-      if (/\d/.test(ch)) f += parseInt(ch);
-      else {
-        pieces[[f, r].join(',')] = ch;
-        f++;
-      }
-    }
+// Tipos de peça (minúsculos) que um lado possui no FEN.
+function ownedPieceTypes(fen, side) {
+  const owned = new Set();
+  const board = String(fen || START_FEN).split(' ')[0];
+  for (const ch of board) {
+    if (!/[a-zA-Z]/.test(ch)) continue;
+    const isWhite = ch === ch.toUpperCase();
+    if ((side === 'w') === isWhite) owned.add(ch.toLowerCase());
   }
-
-  const pieceAtSquare = (sq) => pieces[[parseSquare(sq).f, parseSquare(sq).r].join(',')];
-
-  if (ev === 'quake') {
-    const candidates = ['c3','d3','e3','f3','c4','d4','e4','f4','c5','d5','e5','f5','c6','d6','e6','f6'].filter((s) => !pieceAtSquare(s));
-    while (holes.length < 2 && candidates.length) {
-      const i = Math.floor(Math.random() * candidates.length);
-      holes.push(candidates.splice(i, 1)[0]);
-    }
-    data.holes = holes;
-  } else if (ev === 'portal') {
-    const candidates = [...Array(8)].flatMap((_, r) => [...Array(8)].map((__, f) => String.fromCharCode(97 + f) + (r + 1))).filter((s) => !pieceAtSquare(s));
-    while (portals.length < 2 && candidates.length) {
-      const i = Math.floor(Math.random() * candidates.length);
-      portals.push(candidates.splice(i, 1)[0]);
-    }
-    data.portals = portals;
-  } else if (ev === 'mines') {
-    const candidates = [...Array(8)].flatMap((_, r) => [...Array(8)].map((__, f) => String.fromCharCode(97 + f) + (r + 1))).filter((s) => {
-      const pc = pieceAtSquare(s);
-      if (!pc) return true;
-      const r = parseSquare(s).r;
-      return r > 1 && r < 6;
-    });
-    while (mines.length < 4 && candidates.length) {
-      const i = Math.floor(Math.random() * candidates.length);
-      mines.push(candidates.splice(i, 1)[0]);
-    }
-    data.mines = mines;
-  } else if (ev === 'swap') {
-    const squareList = [...Array(8)].flatMap((_, r) => [...Array(8)].map((__, f) => String.fromCharCode(97 + f) + (r + 1)));
-    const swapsArr = [];
-    for (const side of ['w', 'b']) {
-      const availablePieces = squareList.filter((s) => {
-        const pc = pieceAtSquare(s);
-        if (!pc) return false;
-        const isWhite = pc === pc.toUpperCase();
-        const isRoyal = pc.toLowerCase() === 'k';
-        return side === 'w' ? (isWhite && !isRoyal) : (!isWhite && !isRoyal);
-      });
-      const pairs = [];
-      for (let i = 0; i < availablePieces.length; i++) {
-        for (let j = i + 1; j < availablePieces.length; j++) {
-          const a = availablePieces[i], b = availablePieces[j];
-          const pa = pieceAtSquare(a), pb = pieceAtSquare(b);
-          const ar = parseSquare(a).r, br = parseSquare(b).r;
-          const pawnSafe = (pa.toLowerCase() !== 'p' || (br > 0 && br < 7)) && (pb.toLowerCase() !== 'p' || (ar > 0 && ar < 7));
-          if (pawnSafe) pairs.push([a, b]);
-        }
-      }
-      if (pairs.length) {
-        const chosen = pairs[Math.floor(Math.random() * pairs.length)];
-        swapsArr.push({ side, a: chosen[0], b: chosen[1] });
-      }
-    }
-    data.swaps = swapsArr;
-  }
-
-  return data;
+  return owned;
 }
 
 function broadcast(room, msg, skipWs = null) {
@@ -133,6 +67,10 @@ function broadcast(room, msg, skipWs = null) {
   for (const ws of room.players) {
     if (ws !== skipWs && ws.readyState === 1) ws.send(data);
   }
+}
+
+function sendTo(ws, msg) {
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg));
 }
 
 function buildStatePayload(room) {
@@ -158,8 +96,14 @@ function buildStatePayload(room) {
     cardsUsed: room.cardsUsed || { w: false, b: false },
     sacrificeUsed: room.sacrificeUsed || { w: false, b: false },
     powerUsed: room.powerUsed || { w: false, b: false },
+    fx: room.fx || null,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Poderes de classe (mesmas regras do cliente: 20 rodadas de recarga, máximo de 3 cargas)
+// ---------------------------------------------------------------------------
+const CLASS_COOLDOWN = 20;
 
 function captureCooldownReduction(type) {
   if (type === 'n' || type === 'b') return 1;
@@ -169,30 +113,74 @@ function captureCooldownReduction(type) {
   return 0;
 }
 
-function tickClassPower(room, side) {
-  const p = room && room.classPower ? room.classPower[side] : null;
-  if (!p) return;
-  if (p.cooldown > 0) {
-    p.cooldown = Math.max(0, p.cooldown - 1);
+function reduceClassCooldownServer(room, side, amount = 1) {
+  const power = room.classPower ? room.classPower[side] : null;
+  if (!power || !room.classes[side] || amount <= 0) return;
+  if (power.charges >= 3) {
+    power.cooldown = 0;
+    return;
   }
-  if (p.cooldown === 0 && p.charges < 3) {
-    p.charges++;
-    p.cooldown = p.charges < 3 ? 20 : 0;
+  if (power.cooldown <= 0) power.cooldown = CLASS_COOLDOWN;
+  power.cooldown = Math.max(0, power.cooldown - amount);
+  if (power.cooldown === 0) {
+    power.charges++;
+    power.cooldown = power.charges < 3 ? CLASS_COOLDOWN : 0;
   }
 }
 
+function spendClassPowerServer(room, side, amount = 1) {
+  const power = room.classPower ? room.classPower[side] : null;
+  if (!power) return;
+  power.charges = Math.max(0, power.charges - amount);
+  if (power.charges < 3 && power.cooldown <= 0) power.cooldown = CLASS_COOLDOWN;
+}
+
+// ---------------------------------------------------------------------------
+// Cartas
+// ---------------------------------------------------------------------------
+const CLASS_CARD = {
+  warrior: 'fury',
+  cleric: 'resurrect',
+  paladin: 'shield',
+  mage: 'grimoire',
+  warlock: 'sacrifice',
+  ranger: 'bomb',
+  bard: 'treason',
+};
+
+function classCardIdsFor(opts, side) {
+  const cls = opts?.classes?.[side];
+  return cls && CLASS_CARD[cls] ? [CLASS_CARD[cls]] : [];
+}
+
+// "treason2" -> { base: 'treason', level: 2 }; cartas sem nível retornam null.
+function leveledCard(id) {
+  const m = /^(treason|resurrect)([23])?$/.exec(String(id));
+  return m ? { base: m[1], level: m[2] ? Number(m[2]) : 1 } : null;
+}
+
+function leveledId(base, level) {
+  return level > 1 ? `${base}${level}` : base;
+}
+
+// Consome UMA carta (ou um nível dela) / uma carga de poder. Usado quando a contramagia anula o efeito;
+// quando o efeito é aplicado, quem jogou envia o consumo exato em "sync".
 function consumeCardServer(room, side, card, isClassPower) {
   if (isClassPower) {
-    const p = room.classPower[side];
-    if (p && p.charges > 0) {
-      p.charges = Math.max(0, p.charges - 1);
-      p.cooldown = p.charges < 3 ? 20 : 0;
-    }
+    spendClassPowerServer(room, side, 1);
     room.powerUsed[side] = true;
-  } else {
-    if (room.hands[side]) room.hands[side] = room.hands[side].filter((c) => c !== card);
-    if (card !== 'counterspell') room.cardsUsed[side] = true;
+    return;
   }
+  const hand = room.hands[side] || (room.hands[side] = []);
+  const idx = hand.indexOf(card);
+  if (idx !== -1) {
+    const lv = leveledCard(card);
+    if (lv && lv.level > 1) hand[idx] = leveledId(lv.base, lv.level - 1);
+    else hand.splice(idx, 1);
+  }
+  if (card === 'counterspell') return;
+  if (card === 'sacrifice' && !room.sacrificeUsed[side]) room.sacrificeUsed[side] = true;
+  else room.cardsUsed[side] = true;
 }
 
 function generateOpeningCards(opts) {
@@ -200,19 +188,10 @@ function generateOpeningCards(opts) {
   const cardCount = 3;
   const openingCards = { w: [], b: [] };
   if (opts?.cards) {
-    const classCardIds = { w: [], b: [] };
-    if (opts.classes) {
-      const classMap = { warrior: 'fury', cleric: 'resurrect', paladin: 'shield', mage: 'grimoire', warlock: 'sacrifice', ranger: 'bomb', bard: 'treason' };
-      for (const side of sides) {
-        if (opts.classes[side] && classMap[opts.classes[side]]) {
-          classCardIds[side].push(classMap[opts.classes[side]]);
-        }
-      }
-    }
     const pools = Object.fromEntries(
       sides.map((side) => [
         side,
-        (opts.enabledCards || []).filter((id) => !classCardIds[side].includes(id)),
+        (opts.enabledCards || []).filter((id) => !classCardIdsFor(opts, side).includes(id)),
       ]),
     );
     const equalCount = Math.min(cardCount, ...sides.map((side) => pools[side].length));
@@ -234,50 +213,35 @@ function generateOpeningCards(opts) {
 
 function gainCardServer(room, side, id) {
   if (!room.hands[side]) room.hands[side] = [];
-  if (id === 'treason') {
+  for (const base of ['treason', 'resurrect']) {
+    if (id !== base) continue;
     const held = room.hands[side]
-      .map((card, index) => ({ card, index, level: card === 'treason3' ? 3 : card === 'treason2' ? 2 : card === 'treason' ? 1 : 0 }))
-      .filter((x) => x.level > 0 && x.level < 3)
-      .sort((a, b) => a.level - b.level)[0];
+      .map((card, index) => ({ card, index, lv: leveledCard(card) }))
+      .filter((x) => x.lv && x.lv.base === base && x.lv.level < 3)
+      .sort((a, b) => a.lv.level - b.lv.level)[0];
     if (held) {
-      room.hands[side][held.index] = held.level === 1 ? 'treason2' : 'treason3';
-      return;
-    }
-  }
-  if (id === 'resurrect') {
-    const held = room.hands[side]
-      .map((card, index) => ({ card, index, level: card === 'resurrect3' ? 3 : card === 'resurrect2' ? 2 : card === 'resurrect' ? 1 : 0 }))
-      .filter((x) => x.level > 0 && x.level < 3)
-      .sort((a, b) => a.level - b.level)[0];
-    if (held) {
-      room.hands[side][held.index] = held.level === 1 ? 'resurrect2' : 'resurrect3';
+      room.hands[side][held.index] = leveledId(base, held.lv.level + 1);
       return;
     }
   }
   room.hands[side].push(id);
 }
 
+// Mesmo critério do cliente: a carta só entra no sorteio se o jogador tem a peça que ela exige.
 function gainCardRandom(room, side, opts) {
   if (!opts?.cards) return;
-  const classCardIds = { w: [], b: [] };
-  if (opts.classes) {
-    const classMap = { warrior: 'fury', cleric: 'resurrect', paladin: 'shield', mage: 'grimoire', warlock: 'sacrifice', ranger: 'bomb', bard: 'treason' };
-    for (const s of ['w', 'b']) {
-      if (opts.classes[s] && classMap[opts.classes[s]]) {
-        classCardIds[s].push(classMap[opts.classes[s]]);
-      }
-    }
-  }
+  const owned = ownedPieceTypes(room.fen, side);
+  const classCards = classCardIdsFor(opts, side);
   const pool = (opts.enabledCards || []).filter(
     (id) =>
-      (id === 'resurrect' || id === 'shield' || id === 'treason' || id === 'bomb' || id === 'counterspell' ||
-        id === 'fury' || id === 'bishopShift' || id === 'knightElephant' || id === 'towerRam' || id === 'kingLeap' || id === 'sacrifice') &&
-      !classCardIds[side].includes(id),
+      (['resurrect', 'shield', 'treason', 'bomb', 'counterspell', 'kingLeap', 'sacrifice'].includes(id) ||
+        (id === 'fury' && owned.has('p')) ||
+        (id === 'bishopShift' && owned.has('b')) ||
+        (id === 'knightElephant' && owned.has('n')) ||
+        (id === 'towerRam' && owned.has('r'))) &&
+      !classCards.includes(id),
   );
-  if (pool.length) {
-    const id = pool[Math.floor(Math.random() * pool.length)];
-    gainCardServer(room, side, id);
-  }
+  if (pool.length) gainCardServer(room, side, pickRandom(pool));
 }
 
 const COUNTERSPELL_TIMEOUT_MS = 20000;
@@ -295,15 +259,17 @@ function resolvePendingCard(room, accepted, responderSide) {
   const pending = room.pendingCard;
   if (!pending) return false;
   clearPendingCard(room);
-  // A carta/poder original é sempre consumido, tenha sido anulado ou não
-  consumeCardServer(room, pending.playerSide, pending.card, pending.isClassPower);
   if (accepted) {
+    // Contramagia usada: a carta/poder original é gasto sem efeito e a contramagia também
+    consumeCardServer(room, pending.playerSide, pending.card, pending.isClassPower);
     const hand = responderSide ? room.hands[responderSide] : null;
     const idx = hand ? hand.indexOf('counterspell') : -1;
     if (idx !== -1) hand.splice(idx, 1);
     if (responderSide) room.cardsUsed[responderSide] = true;
+    broadcast(room, buildStatePayload(room));
     broadcast(room, { type: 'cardCancelled', playerSide: pending.playerSide });
   } else {
+    // O consumo exato é enviado por quem jogou (sync) depois de aplicar o efeito
     broadcast(room, {
       type: 'cardConfirmed',
       card: pending.card,
@@ -313,19 +279,48 @@ function resolvePendingCard(room, accepted, responderSide) {
       powerId: pending.powerId,
     });
   }
-  broadcast(room, buildStatePayload(room));
   return true;
 }
 
-app.use(express.json());
-app.use(express.static(join(__dirname, 'dist')));
+// ---------------------------------------------------------------------------
+// Efeitos de tabuleiro (fx) enviados pelo cliente
+// ---------------------------------------------------------------------------
+const FX_ARRAY_KEYS = ['shields', 'bombs', 'stunned', 'scheduledBishops', 'holes', 'portals', 'mines', 'eventHighlights'];
 
-// Link direto da sala (/room/CODIGO): serve a página principal; o cliente lê o código da URL e entra na sala.
-app.get('/room/:code', (req, res) => {
-  res.sendFile(join(__dirname, 'dist', 'index.html'));
-});
+// Guarda o fx (sem o aviso transitório "event") e espelha nos campos que o servidor expõe.
+function storeFx(room, fx) {
+  if (!fx || typeof fx !== 'object') return;
+  const clean = {};
+  for (const key of FX_ARRAY_KEYS) if (Array.isArray(fx[key])) clean[key] = fx[key];
+  if (fx.dead && typeof fx.dead === 'object') clean.dead = fx.dead;
+  if ('roulette' in fx) clean.roulette = fx.roulette || null;
+  if ('eventType' in fx) clean.eventType = fx.eventType || null;
+  if ('eventForecast' in fx) clean.eventForecast = fx.eventForecast || null;
+  if (Array.isArray(fx.roundDeltas)) clean.roundDeltas = fx.roundDeltas;
+  if (Array.isArray(fx.activity)) clean.activity = fx.activity.slice(-40);
+  if (typeof fx.roundMaterialBaseline === 'number') clean.roundMaterialBaseline = fx.roundMaterialBaseline;
+  room.fx = { ...(room.fx || {}), ...clean };
+  if (clean.dead) room.dead = clean.dead;
+  if (clean.holes) room.holes = clean.holes;
+  if (clean.portals) room.portals = clean.portals;
+  if (clean.mines) room.mines = clean.mines;
+  if ('eventType' in clean) room.eventType = clean.eventType;
+  if ('eventForecast' in clean) room.eventForecast = clean.eventForecast;
+}
 
-// ... rest of file
+function adoptFen(room, fen) {
+  if (typeof fen !== 'string' || fen.split(' ').length < 4) return false;
+  room.fen = fen;
+  room.turn = fen.split(' ')[1] === 'b' ? 'b' : 'w';
+  return true;
+}
+
+// Reinicia a flag de uso por turno do lado que passa a jogar (mesma regra do cliente).
+function resetTurnFlags(room) {
+  room.cardsUsed[room.turn] = false;
+  room.powerUsed[room.turn] = false;
+  room.sacrificeUsed[room.turn] = false;
+}
 
 const REQUEST_TIMEOUT_MS = 30000;
 
@@ -369,15 +364,22 @@ function createGameState(opts) {
     cardsUsed: { w: false, b: false },
     sacrificeUsed: { w: false, b: false },
     powerUsed: { w: false, b: false },
+    captureRewards: { w: [], b: [] },
+    classPicks: null,
+    fx: null,
   };
 }
 
 // Distribui as cartas iniciais e avisa os dois jogadores que a partida começou.
 function startRoomMatch(room, restarted) {
-  // Gerar cartas iniciais no servidor
-  const openingCards = generateOpeningCards(room.opts);
-  room.hands = openingCards;
-  const initialForecast = randomEventData(room.opts, room.fen);
+  room.matchActive = true;
+  room.hands = generateOpeningCards(room.opts);
+  const evTypes = room.opts?.eventTypes || [];
+  room.eventForecast =
+    room.opts?.events && evTypes.length ? { type: pickRandom(evTypes), squares: [] } : null;
+  // Na roleta, o primeiro sorteio só pode cair em peças que têm lance na posição inicial
+  const roulette = room.opts?.mode === 'roulette' ? pickRandom(['p', 'n']) : null;
+  if (roulette) room.fx = { ...(room.fx || {}), roulette };
   const startMsg = {
     type: 'start',
     restarted: Boolean(restarted),
@@ -387,10 +389,11 @@ function startRoomMatch(room, restarted) {
     round: room.round,
     eventPly: room.eventPly,
     eventType: room.eventType,
-    eventForecast: initialForecast ? { type: initialForecast.type } : null,
+    eventForecast: room.eventForecast,
     opts: room.opts,
     sides: room.sides,
     hands: room.hands,
+    roulette,
   };
   // Se classes randômicas, escolher no servidor e enviar no início
   if (room.opts?.randomClasses) {
@@ -399,11 +402,13 @@ function startRoomMatch(room, restarted) {
     startMsg.classes = room.classes;
     room.opts.classes = { w: room.classes.w, b: room.classes.b };
     room.hands = generateOpeningCards(room.opts);
-    room.classPower = { w: { charges: 1, cooldown: 0 }, b: { charges: 1, cooldown: 0 } };
+    room.classPower = {
+      w: { charges: 1, cooldown: CLASS_COOLDOWN },
+      b: { charges: 1, cooldown: CLASS_COOLDOWN },
+    };
     startMsg.hands = room.hands;
     startMsg.classPower = room.classPower;
   }
-  if (initialForecast) room.eventForecast = initialForecast;
   broadcast(room, startMsg);
 }
 
@@ -413,11 +418,23 @@ function restartRoom(room) {
   clearPendingRequest(room);
   const opts = JSON.parse(JSON.stringify(room.baseOpts || {}));
   Object.assign(room, createGameState(opts));
-  room.classPicks = null;
   room.started = true;
   room.lastActivity = Date.now();
   startRoomMatch(room, true);
 }
+
+// Quem volta para uma partida em andamento recebe o estado completo (sem sortear nada de novo).
+function resumeRoomFor(room, ws) {
+  sendTo(ws, { ...buildStatePayload(room), type: 'start', resumed: true, opts: room.opts, sides: room.sides });
+}
+
+app.use(express.json());
+app.use(express.static(join(__dirname, 'dist')));
+
+// Link direto da sala (/room/CODIGO): serve a página principal; o cliente lê o código da URL e entra na sala.
+app.get('/room/:code', (req, res) => {
+  res.sendFile(join(__dirname, 'dist', 'index.html'));
+});
 
 app.post('/api/rooms', (req, res) => {
   const code = generateCode();
@@ -426,6 +443,8 @@ app.post('/api/rooms', (req, res) => {
     code,
     players: [],
     started: false,
+    matchActive: false,
+    lastActivity: Date.now(),
     baseOpts: JSON.parse(JSON.stringify(baseOpts)),
     ...createGameState(baseOpts),
   };
@@ -448,7 +467,7 @@ setInterval(() => {
 
 wss.on('connection', (ws, req) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
-  const code = url.searchParams.get('code');
+  const code = String(url.searchParams.get('code') || '').toUpperCase();
   if (!code) {
     ws.close(1008, 'Código de sala obrigatório');
     return;
@@ -466,86 +485,84 @@ wss.on('connection', (ws, req) => {
   }
 
   room.lastActivity = Date.now();
-  const playerIndex = room.players.push(ws) - 1;
-
   if (!room.sides) {
     room.sides = Math.random() < 0.5 ? ['w', 'b'] : ['b', 'w'];
   }
-  const mySide = room.sides[playerIndex];
+  // O lado pertence à conexão: quem volta assume o lado que ficou livre (a ordem do array não importa)
+  const takenSides = room.players.map((p) => p.side);
+  ws.side = room.sides.find((s) => !takenSides.includes(s)) || room.sides[0];
+  ws.playerNo = room.sides.indexOf(ws.side) + 1;
+  room.players.push(ws);
+  const mySide = ws.side;
+  const sideOf = () => ws.side;
+  const otherPlayer = () => room.players.find((p) => p !== ws);
 
-  ws.send(JSON.stringify({ type: 'joined', player: playerIndex + 1, players: room.players.length, side: mySide }));
+  ws.send(JSON.stringify({ type: 'joined', player: ws.playerNo, players: room.players.length, side: mySide }));
 
   if (room.players.length === 2) {
     room.started = true;
-    startRoomMatch(room, false);
+    const draftIncomplete =
+      room.opts?.classes && !room.opts?.randomClasses && !(room.classes.w && room.classes.b);
+    if (!room.matchActive || draftIncomplete) {
+      room.classPicks = null;
+      startRoomMatch(room, false);
+    } else {
+      // Reconexão no meio da partida: restaura o estado de quem voltou e avisa o outro
+      resumeRoomFor(room, ws);
+      sendTo(otherPlayer(), { type: 'opponentRejoined' });
+    }
   }
 
   ws.on('message', (data) => {
     try {
       const msg = JSON.parse(data);
       room.lastActivity = Date.now();
+      const side = sideOf();
 
       if (msg.type === 'move') {
-        // Adotar o FEN resultante do cliente (mesma posição de tabuleiro)
-        if (msg.fen) {
-          const g = new Chess(msg.fen);
-          room.fen = msg.fen;
-          room.turn = g.turn();
-          room.lastMove = { from: msg.from, to: msg.to };
-        }
-        const fenTurn = room.turn;
-        const movedColor = fenTurn === 'w' ? 'b' : 'w';
+        if (!side || room.winner || !adoptFen(room, msg.fen)) return;
+        const movedColor = side;
+        room.lastMove = { from: msg.from, to: msg.to };
 
         // Registrar no histórico
         if (msg.san) room.history.push(msg.san);
         else if (msg.from && msg.to) room.history.push(`${msg.from}-${msg.to}`);
 
-        // Contadores de rodada/evento: só rodadas novas quando pretas moveram
-        if (movedColor === 'b') {
-          room.round = room.round + 1;
-          tickClassPower(room, 'w');
-          tickClassPower(room, 'b');
-          // Resetar flags de uso por turno ao iniciar um novo round
-          room.cardsUsed = { w: false, b: false };
-          room.powerUsed = { w: false, b: false };
-          room.sacrificeUsed = { w: false, b: false };
-        }
-        if (room.opts?.events) {
-          room.eventPly = room.eventPly + 1;
-          if (room.eventPly >= 20 && room.opts.eventTypes?.length) {
-            const evData = randomEventData(room.opts, room.fen);
-            if (evData) {
-              room.eventType = evData.type;
-              room.holes = evData.holes || [];
-              room.portals = evData.portals || [];
-              room.mines = evData.mines || [];
-              room.swaps = evData.swaps || [];
-              room.eventForecast = randomEventData(room.opts, room.fen);
-            }
-            room.eventPly = 0;
-            broadcast(room, { type: 'eventTrigger', ...(evData || {}) });
-            if (room.eventForecast) broadcast(room, { type: 'eventForecast', eventType: room.eventForecast.type, squares: [] });
+        // Quem passa a jogar começa o turno com as flags de uso zeradas (como no cliente)
+        resetTurnFlags(room);
+        if (msg.fx) storeFx(room, msg.fx);
+
+        // Capturas: cooldown do poder, mortos (se o cliente não enviou fx) e carta de recompensa
+        if (msg.captured) {
+          if (!msg.fx?.dead) {
+            const victimColor = movedColor === 'w' ? 'b' : 'w';
+            room.dead[victimColor] = room.dead[victimColor] || [];
+            room.dead[victimColor].push({ type: msg.captured, color: victimColor });
+          }
+          const reduction = captureCooldownReduction(msg.captured);
+          if (reduction > 0) reduceClassCooldownServer(room, movedColor, reduction);
+          if (msg.captured === 'k') room.winner = movedColor;
+          // Só a primeira captura de cada tipo rende carta (exceto a dama, que sempre rende)
+          if (
+            room.opts?.cards &&
+            ['n', 'b', 'r', 'q'].includes(msg.captured) &&
+            (msg.captured === 'q' || !room.captureRewards[movedColor].includes(msg.captured))
+          ) {
+            if (msg.captured !== 'q') room.captureRewards[movedColor].push(msg.captured);
+            gainCardRandom(room, movedColor, room.opts);
           }
         }
 
-        // Capturas
-        if (msg.captured) {
-          const victimColor = movedColor === 'w' ? 'b' : 'w';
-          room.dead[victimColor] = room.dead[victimColor] || [];
-          room.dead[victimColor].push({ type: msg.captured, color: victimColor });
-          const reduction = captureCooldownReduction(msg.captured);
-          if (reduction > 0) {
-            const p = movedColor === 'w' ? room.classPower.w : room.classPower.b;
-            if (p && p.cooldown > 0) p.cooldown = Math.max(0, p.cooldown - reduction);
-            if (p && p.cooldown === 0) {
-              p.charges++;
-              p.cooldown = p.charges < 3 ? 20 : 0;
-            }
-          }
-          // O servidor decide qual carta o jogador que capturou ganha
-          if (['n', 'b', 'r', 'q'].includes(msg.captured)) {
-            gainCardRandom(room, movedColor, room.opts);
-          }
+        // Rodada nova quando as pretas movem: recarga dos poderes dos dois lados
+        if (movedColor === 'b') {
+          room.round = room.round + 1;
+          reduceClassCooldownServer(room, 'w', 1);
+          reduceClassCooldownServer(room, 'b', 1);
+        }
+        // Contador de eventos: o cliente que jogou dispara o evento e avisa no fx
+        if (room.opts?.events) {
+          room.eventPly = room.eventPly + 1;
+          if (msg.fx?.event) room.eventPly = 0;
         }
 
         broadcast(room, {
@@ -558,32 +575,66 @@ wss.on('connection', (ws, req) => {
           san: msg.san || null,
           piece: msg.piece || null,
           color: movedColor,
+          fx: msg.fx || null,
         });
+        broadcast(room, buildStatePayload(room));
+      } else if (msg.type === 'sync') {
+        // Resultado de uma carta/poder aplicado por quem jogou: tabuleiro, efeitos e consumo exato
+        if (!side || room.winner) return;
+        if (msg.fen) adoptFen(room, msg.fen);
+        if (msg.fx) storeFx(room, msg.fx);
+        const op = msg.op;
+        if (op && typeof op === 'object') {
+          const hand = room.hands[side] || (room.hands[side] = []);
+          if (typeof op.remove === 'string') {
+            const idx = hand.indexOf(op.remove);
+            if (idx !== -1) {
+              if (typeof op.replaceWith === 'string') hand[idx] = op.replaceWith;
+              else hand.splice(idx, 1);
+            }
+          }
+          if (op.spendPower) spendClassPowerServer(room, side, Math.max(1, Math.min(3, op.spendPower | 0)));
+          if (op.flags && typeof op.flags === 'object') {
+            for (const key of ['cardsUsed', 'powerUsed', 'sacrificeUsed']) {
+              if (typeof op.flags[key] === 'boolean') room[key][side] = op.flags[key];
+            }
+          }
+          if (Array.isArray(op.gain)) {
+            for (const id of op.gain.slice(0, 9)) if (typeof id === 'string') gainCardServer(room, side, id);
+          }
+        }
         broadcast(room, buildStatePayload(room));
       } else if (msg.type === 'classPick') {
         // O lado vem da conexão (não do cliente) e a escolha, depois de feita, não pode mudar
-        const pickSide = room.sides ? room.sides[room.players.indexOf(ws)] : null;
-        if (!pickSide || !msg.class) return;
+        if (!side || !msg.class || !CLASS_CARD[msg.class]) return;
         room.classPicks = room.classPicks || {};
-        if (room.classPicks[pickSide]) return;
-        room.classPicks[pickSide] = msg.class;
+        if (room.classPicks[side]) return;
+        room.classPicks[side] = msg.class;
         if (room.classPicks.w && room.classPicks.b) {
           room.classes.w = room.classPicks.w;
           room.classes.b = room.classPicks.b;
           // Regenerar as mãos com as classes definidas
           room.opts.classes = { w: room.classes.w, b: room.classes.b };
           room.hands = generateOpeningCards(room.opts);
-room.classPower = { w: { charges: 1, cooldown: 20 }, b: { charges: 1, cooldown: 20 } };
-          broadcast(room, { type: 'classReady', classes: { w: room.classes.w, b: room.classes.b }, hands: room.hands });
+          room.classPower = {
+            w: { charges: 1, cooldown: CLASS_COOLDOWN },
+            b: { charges: 1, cooldown: CLASS_COOLDOWN },
+          };
+          broadcast(room, {
+            type: 'classReady',
+            classes: { w: room.classes.w, b: room.classes.b },
+            hands: room.hands,
+            classPower: room.classPower,
+            roulette: room.fx?.roulette || null,
+          });
         }
       } else if (msg.type === 'cardPlay') {
-        // O servidor valida e processa o uso de carta
-        // Em multiplayer, o servidor é a autoridade para as mãos
-        const playerSide = room.sides ? room.sides[room.players.indexOf(ws)] : null;
-        if (!playerSide) {
+        // O servidor valida a posse; o efeito é aplicado por quem jogou depois da contramagia
+        if (!side || room.winner) {
           ws.send(JSON.stringify({ type: 'error', message: 'Não está na partida' }));
           return;
         }
+        const playerSide = side;
         const card = msg.card;
         const target = msg.target;
         const isClassPower = !!msg.isClassPower;
@@ -592,16 +643,28 @@ room.classPower = { w: { charges: 1, cooldown: 20 }, b: { charges: 1, cooldown: 
           ws.send(JSON.stringify({ type: 'error', message: 'Dados de carta inválidos' }));
           return;
         }
-        // Validar posse ANTES de guardar como pending - mas NÃO consumir ainda
+        if (room.turn !== playerSide) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Só é possível usar cartas na sua vez.' }));
+          return;
+        }
         if (isClassPower) {
           const p = room.classPower[playerSide];
           if (!p || p.charges < 1) {
             ws.send(JSON.stringify({ type: 'error', message: 'Sem cargas disponíveis para o poder.' }));
             return;
           }
+          if (room.powerUsed[playerSide] || room.cardsUsed[playerSide]) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Você já usou o poder ou uma carta neste turno.' }));
+            return;
+          }
         } else {
           if (!room.hands[playerSide] || !room.hands[playerSide].includes(card)) {
             ws.send(JSON.stringify({ type: 'error', message: 'Você não tem esta carta na mão' }));
+            return;
+          }
+          const sacrificeExtra = card === 'sacrifice' && !room.sacrificeUsed[playerSide];
+          if ((room.cardsUsed[playerSide] || room.powerUsed[playerSide]) && !sacrificeExtra) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Você já usou uma carta ou poder neste turno.' }));
             return;
           }
         }
@@ -615,7 +678,7 @@ room.classPower = { w: { charges: 1, cooldown: 20 }, b: { charges: 1, cooldown: 
         }
         // Verificar se o adversário (conectado) tem contramagia
         const opponentSide = room.sides ? room.sides.find((s) => s !== playerSide) : null;
-        const otherWs = room.players.find((p) => p !== ws);
+        const otherWs = otherPlayer();
         if (
           opponentSide &&
           otherWs &&
@@ -624,60 +687,49 @@ room.classPower = { w: { charges: 1, cooldown: 20 }, b: { charges: 1, cooldown: 
           room.hands[opponentSide].includes('counterspell') &&
           !room.cardsUsed[opponentSide]
         ) {
-          // Guardar detalhes da carta - consumo será feito após decisão do counterspell
+          // Guardar detalhes da carta - o consumo só acontece se a contramagia for usada
           room.pendingCard = { card, target, playerSide, isClassPower, powerId, responderWs: otherWs };
           // Sem resposta a tempo, a carta resolve normalmente (evita travar o jogo)
           room.pendingTimer = setTimeout(() => {
             const pending = room.pendingCard;
             if (!pending) return;
             const responderSide = room.sides.find((s) => s !== pending.playerSide);
-            if (pending.responderWs && pending.responderWs.readyState === 1) {
-              pending.responderWs.send(JSON.stringify({ type: 'counterspellExpired' }));
-            }
+            sendTo(pending.responderWs, { type: 'counterspellExpired' });
             resolvePendingCard(room, false, responderSide);
           }, COUNTERSPELL_TIMEOUT_MS);
-          otherWs.send(JSON.stringify({ type: 'counterspellRequest', card, target, playerSide, isClassPower, powerId }));
+          sendTo(otherWs, { type: 'counterspellRequest', card, target, playerSide, isClassPower, powerId });
           broadcast(room, buildStatePayload(room));
           return;
         }
-        // Nenhum counterspell disponível, consumir e confirmar carta imediatamente
-        consumeCardServer(room, playerSide, card, isClassPower);
-        broadcast(room, buildStatePayload(room));
+        // Nenhuma contramagia disponível: quem jogou aplica o efeito e envia o resultado (sync)
         broadcast(room, { type: 'cardConfirmed', card, target, playerSide, isClassPower, powerId });
       } else if (msg.type === 'counterspellResponse') {
         // Servidor processa resposta de contramagia
-        const playerSide = room.sides ? room.sides[room.players.indexOf(ws)] : null;
-        if (!playerSide) return;
+        if (!side) return;
         const pending = room.pendingCard;
         if (!pending) return;
         // Só o oponente de quem jogou a carta pode responder
-        if (playerSide === pending.playerSide) return;
-        const hasCounter = !!room.hands[playerSide] && room.hands[playerSide].includes('counterspell');
-        resolvePendingCard(room, !!msg.accepted && hasCounter, playerSide);
-      } else if (msg.type === 'counterspellRequest') {
-        // Servidor encaminha solicitação de contramagia para o adversário
-        const playerSide = msg.playerSide;
-        const opponentSide = room.sides ? room.sides.find((s) => s !== playerSide) : null;
-        if (!opponentSide) return;
-        const oppIdx = room.players.indexOf(ws);
-        const otherIdx = oppIdx === 0 ? 1 : 0;
-        const otherWs = room.players[otherIdx];
-        if (otherWs) {
-          otherWs.send(JSON.stringify({ type: 'counterspellRequest', card: msg.card, target: msg.target, playerSide, isClassPower: !!msg.isClassPower, powerId: msg.powerId }));
-        }
+        if (side === pending.playerSide) return;
+        const hasCounter = !!room.hands[side] && room.hands[side].includes('counterspell');
+        resolvePendingCard(room, !!msg.accepted && hasCounter, side);
       } else if (msg.type === 'resign') {
         // Desistência: quem enviou perde; o lado vem da conexão
-        const loser = room.sides ? room.sides[room.players.indexOf(ws)] : null;
-        if (!loser || room.winner) return;
+        if (!side || room.winner) return;
         clearPendingCard(room);
         clearPendingRequest(room);
-        room.winner = loser === 'w' ? 'b' : 'w';
-        broadcast(room, { type: 'gameOver', reason: 'resign', loser, winner: room.winner });
+        room.winner = side === 'w' ? 'b' : 'w';
+        broadcast(room, { type: 'gameOver', reason: 'resign', loser: side, winner: room.winner });
+      } else if (msg.type === 'mateAccepted') {
+        // O jogador em xeque-mate recusou a "última chance": a partida termina para os dois
+        if (!side || room.winner) return;
+        clearPendingCard(room);
+        clearPendingRequest(room);
+        room.winner = side === 'w' ? 'b' : 'w';
+        broadcast(room, { type: 'gameOver', reason: 'checkmate', loser: side, winner: room.winner });
       } else if (msg.type === 'request') {
         // Pedido de reinício ou empate: o oponente precisa aceitar
         const kind = msg.kind;
-        const from = room.sides ? room.sides[room.players.indexOf(ws)] : null;
-        if (!from || !['restart', 'draw'].includes(kind) || room.players.length < 2) return;
+        if (!side || !['restart', 'draw'].includes(kind) || room.players.length < 2) return;
         if (kind === 'draw' && room.winner) return;
         if (room.pendingRequest) {
           ws.send(JSON.stringify({ type: 'error', message: 'Já existe um pedido aguardando resposta.' }));
@@ -687,14 +739,14 @@ room.classPower = { w: { charges: 1, cooldown: 20 }, b: { charges: 1, cooldown: 
           ws.send(JSON.stringify({ type: 'error', message: 'Aguarde a resolução da carta em andamento.' }));
           return;
         }
-        const otherWs = room.players.find((p) => p !== ws);
+        const otherWs = otherPlayer();
         if (!otherWs || otherWs.readyState !== 1) {
           ws.send(JSON.stringify({ type: 'error', message: 'O adversário não está conectado.' }));
           return;
         }
-        room.pendingRequest = { kind, from, ws };
+        room.pendingRequest = { kind, from: side, ws };
         room.requestTimer = setTimeout(() => resolveRequestDeclined(room, 'expired'), REQUEST_TIMEOUT_MS);
-        otherWs.send(JSON.stringify({ type: 'request', kind, from }));
+        otherWs.send(JSON.stringify({ type: 'request', kind, from: side }));
       } else if (msg.type === 'requestResponse') {
         const req = room.pendingRequest;
         // Só o oponente de quem pediu pode responder
@@ -707,6 +759,7 @@ room.classPower = { w: { charges: 1, cooldown: 20 }, b: { charges: 1, cooldown: 
         if (req.kind === 'restart') {
           restartRoom(room);
         } else {
+          room.winner = null;
           broadcast(room, { type: 'gameOver', reason: 'draw' });
         }
       } else if (msg.type === 'requestCancel') {

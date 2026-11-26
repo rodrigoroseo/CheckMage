@@ -620,7 +620,8 @@ function beginMatch() {
     }
   }
   for (const side of sides) {
-    if (state.classes[side]) state.classPower[side] = { charges: 1, cooldown: 0 };
+    if (state.classes[side])
+      state.classPower[side] = { charges: 1, cooldown: MP.connected ? 20 : 0 };
     const base = openingCards[side].filter((id) => id !== 'classPower');
     const hand = [];
     if (state.opts.classes && state.classes[side]) hand.push('classPower');
@@ -634,7 +635,10 @@ function beginMatch() {
   $('#board').classList.remove('board-draft-dim');
   $('#hands-panel').classList.toggle('hidden', !state.opts.cards && !state.opts.classes);
   startAmbient('game');
-  if (state.opts.mode === 'roulette') rollRoulette();
+  if (state.opts.mode === 'roulette') {
+    if (MP.connected) state.roulette = MP.serverRoulette || null;
+    else rollRoulette();
+  }
   render();
 }
 
@@ -785,6 +789,10 @@ function settleClassCharge(side) {
 function reduceClassCooldown(side, amount = 1) {
   const power = state.classPower[side];
   if (!state.classes[side] || amount <= 0) return;
+  if (power.charges >= 3) {
+    power.cooldown = 0;
+    return;
+  }
   if (power.cooldown <= 0) power.cooldown = classCooldownLength();
   power.cooldown = Math.max(0, power.cooldown - amount);
   if (power.cooldown === 0) {
@@ -1378,7 +1386,8 @@ function renderClassPortraits() {
       continue;
     }
     const power = state.classPower[side];
-    const ready = power.charges >= 1 && state.game.turn() === side;
+    const ready =
+      power.charges >= 1 && state.game.turn() === side && (!MP.connected || side === MP.side);
     const src = classPortraits[`./assets/classes/${cls}.png`];
     el.classList.toggle('hidden', false);
     el.replaceChildren();
@@ -1960,7 +1969,7 @@ function fogPseudoMoves(from, vision = false) {
       !isShielded(m.to),
   );
 }
-function fogVisible(color = state.game.turn()) {
+function fogVisible(color = MP.connected && MP.side ? MP.side : state.game.turn()) {
   const seen = new Set();
   for (const from of allSquares()) {
     const p = pieceAt(from);
@@ -2299,8 +2308,8 @@ function postMoveCleanup(side, captured) {
     tickClassRounds();
     if (state.opts.events && state.eventPly >= 20) {
       state.eventPly = 0;
-      // Em multiplayer, eventos são disparados pelo servidor via eventTrigger
-      if (!MP.connected) triggerEvent();
+      // Em multiplayer o evento é calculado por quem jogou e enviado no fx do lance
+      triggerEvent();
     }
   }
   processScheduledBishops();
@@ -2316,7 +2325,7 @@ function postMoveCleanup(side, captured) {
       (state.opts.mode === 'fog' && fogHasHiddenCheck(state.game.turn())))
   )
     rollRoulette();
-  state.handSide = state.game.turn();
+  state.handSide = MP.connected && MP.side ? MP.side : state.game.turn();
   state.cardsUsed[state.game.turn()] = false;
   state.powerUsed[state.game.turn()] = false;
   state.sacrificeUsed[state.game.turn()] = false;
@@ -2345,6 +2354,7 @@ function onCapture(side, sq, type) {
       toast(`A armadilha foi desarmada com a captura de sua peça de origem.`);
     }
   if (
+    !MP.connected && // no multiplayer a carta de recompensa é sorteada e entregue pelo servidor
     state.opts.cards &&
     ['n', 'b', 'r', 'q'].includes(type) &&
     (type === 'q' || !state.captureRewards[side].includes(type))
@@ -2660,10 +2670,20 @@ function ageBombs(moved, capturedSquare) {
     }
   }
 }
-function finishCheckmate() {
+/* No multiplayer cada lado recarrega o FEN a cada lance (sem histórico), então a tripla repetição
+   não é detectável de forma igual nos dois; só valem afogamento, material insuficiente e 50 lances. */
+function isDrawNow() {
+  if (!MP.connected) return state.game.isDraw();
+  return (
+    state.game.isStalemate() ||
+    state.game.isInsufficientMaterial() ||
+    state.game.isDrawByFiftyMoves()
+  );
+}
+function finishCheckmate(loser = state.game.turn()) {
   state.ended = true;
   playSound('mate');
-  const winner = state.game.turn() === 'w' ? 'Pretas' : 'Brancas';
+  const winner = loser === 'w' ? 'Pretas' : 'Brancas';
   showModal('XEQUE-MATE', `${winner} venceram por xeque-mate!`, '', [
     { label: 'Jogar novamente', primary: true, fn: playAgain },
     { label: 'Voltar à configuração', fn: goSetup },
@@ -2754,12 +2774,25 @@ function checkEnd() {
     !(state.opts.mode === 'fog' && fogHasHiddenCheck(state.game.turn()))
   ) {
     const side = state.game.turn(),
-      responses = rescueOptions(side);
-    if (
-      (state.opts.cards || state.opts.classes) &&
-      !state.mateResponseOffered &&
-      responses.length
-    ) {
+      responses = rescueOptions(side),
+      canRescue =
+        (state.opts.cards || state.opts.classes) && !state.mateResponseOffered && responses.length;
+    if (MP.connected) {
+      // Só quem está em xeque-mate decide; o servidor encerra a partida para os dois
+      if (side !== MP.side) {
+        if (canRescue) {
+          state.mateResponseOffered = true;
+          toast('Xeque-mate! Aguardando o adversário decidir a última chance...');
+        }
+        return;
+      }
+      if (state.mateResponseOffered) return;
+      if (!canRescue) {
+        mpSendMateAccepted();
+        return;
+      }
+    }
+    if (canRescue) {
       state.mateResponseOffered = true;
       state.handSide = side;
       renderHand();
@@ -2768,7 +2801,10 @@ function checkEnd() {
         'Uma carta pode salvar o rei.',
         'Escolha somente uma ação que deixa o rei fora de xeque. Se desistir, a partida termina.',
         [
-          { label: 'Aceitar o xeque-mate', fn: finishCheckmate },
+          {
+            label: 'Aceitar o xeque-mate',
+            fn: () => (MP.connected ? mpSendMateAccepted() : finishCheckmate()),
+          },
           ...responses.map((option, i) => ({
             label: option.label,
             primary: i === 0,
@@ -2781,7 +2817,7 @@ function checkEnd() {
     finishCheckmate();
     return;
   }
-  if (!state.ended && state.game.isDraw()) {
+  if (!state.ended && isDrawNow()) {
     state.ended = true;
     playSound('draw');
     showModal('PARTIDA ENCERRADA', 'Empate!', '', [
@@ -2968,6 +3004,7 @@ if (ev === 'swap') {
   $('#event-banner').classList.remove('hidden');
   recordActivity('event', title, msg, color);
   toast(title + '! ' + msg);
+  if (MP.connected) state.pendingEventNotice = { type: ev, title, msg };
   prepareEventForecast();
 }
 function useCard(i, skipCounterspell = false, forcedId = null, classPower = false) {
@@ -3475,7 +3512,16 @@ function cardTarget(s, fromServer = false) {
     state.dead[us].push({ type, color: us, sacrificed: true });
     consumeCard(`${name} sacrificada; recebeu ${value} carta${value === 1 ? '' : 's'}.`);
     state.sacrificeUsed[us] = true;
-    for (let i = 0; i < value; i++) gainCard(us, random(pool));
+    const gained = [];
+    for (let i = 0; i < value; i++) {
+      const gainedId = random(pool);
+      gainCard(us, gainedId);
+      gained.push(gainedId);
+    }
+    if (state.lastCardOp) {
+      state.lastCardOp.gain = gained;
+      state.lastCardOp.flags.sacrificeUsed = true;
+    }
     toast(`${name} sacrificada: +${value} carta${value === 1 ? '' : 's'}.`);
     state.pendingCard = null;
     render();
@@ -3736,23 +3782,37 @@ function placePiece(s, color, type) {
 function consumeCard(details = 'Efeito aplicado.', levelCost = 1) {
   const c = state.pendingCard;
   if (!c) return;
-  if (!c.serverConsumed) {
-    if (c.classPower) {
-      state.powerUsed[c.side] = true;
-      spendClassPower(c.side, Math.min(levelCost, c.level || 1));
-    } else {
-      const base = c.id.startsWith('treason')
-          ? 'treason'
-          : c.id.startsWith('resurrect')
-            ? 'resurrect'
-            : null,
-        remaining = base ? c.level - Math.min(levelCost, c.level) : 0;
-      if (remaining > 0) state.hands[c.side][c.index] = leveledCardId(base, remaining);
-      else state.hands[c.side].splice(c.index, 1);
-      if (c.id === 'sacrifice' && !state.sacrificeUsed[c.side]) state.sacrificeUsed[c.side] = true;
-      else state.cardsUsed[c.side] = true;
+  // "op" descreve o consumo exato para o servidor (multiplayer): carta/nível removido, cargas, flags e ganhos
+  const op = { flags: {} };
+  if (c.classPower) {
+    state.powerUsed[c.side] = true;
+    const spent = Math.min(levelCost, c.level || 1);
+    spendClassPower(c.side, spent);
+    op.spendPower = spent;
+  } else {
+    const hand = state.hands[c.side];
+    const handIndex = hand[c.index] === c.id ? c.index : hand.indexOf(c.id);
+    const base = c.id.startsWith('treason')
+        ? 'treason'
+        : c.id.startsWith('resurrect')
+          ? 'resurrect'
+          : null,
+      remaining = base ? c.level - Math.min(levelCost, c.level) : 0;
+    if (handIndex !== -1) {
+      if (remaining > 0) hand[handIndex] = leveledCardId(base, remaining);
+      else hand.splice(handIndex, 1);
     }
+    op.remove = c.id;
+    if (remaining > 0) op.replaceWith = leveledCardId(base, remaining);
+    if (c.id === 'sacrifice' && !state.sacrificeUsed[c.side]) state.sacrificeUsed[c.side] = true;
+    else state.cardsUsed[c.side] = true;
   }
+  op.flags = {
+    cardsUsed: state.cardsUsed[c.side],
+    powerUsed: state.powerUsed[c.side],
+    sacrificeUsed: state.sacrificeUsed[c.side],
+  };
+  state.lastCardOp = op;
   const sound = c.id.startsWith('resurrect')
     ? 'cardResurrect'
     : c.id.startsWith('treason')
@@ -4146,7 +4206,6 @@ function mpHandleMessage(msg) {
       if (MP.opponentJoined) {
         toast('Adversário entrou. Partida começando!');
         $('#room-status').innerHTML = '<span class="room-status-dot"></span><span>Adversário conectado!</span>';
-        startMultiplayerGame(msg.fen, msg.opts);
       } else {
         $('#room-status').innerHTML = '<span class="room-status-dot"></span><span>Você é o Jogador 1. Aguardando adversário...</span>';
       }
@@ -4156,12 +4215,24 @@ function mpHandleMessage(msg) {
       MP.side = msg.sides && msg.sides[MP.player - 1] ? msg.sides[MP.player - 1] : MP.side || 'w';
       MP.serverHands = msg.hands || { w: [], b: [] };
       MP.serverClasses = msg.classes || null;
+      MP.serverRoulette = msg.roulette || null;
       if (msg.restarted) {
         clearModal();
         state.requestModal = null;
         toast('Partida reiniciada!');
-      } else toast('Partida começou!');
+      } else if (msg.resumed) toast('Você voltou para a partida.');
+      else toast('Partida começou!');
       startMultiplayerGame(msg.fen, msg.opts);
+      if (msg.resumed) {
+        // Reconexão: nada é sorteado de novo; classes, mãos e efeitos vêm do servidor
+        if (state.classDraft && msg.classes?.w && msg.classes?.b) {
+          state.classes = { ...msg.classes };
+          state.classDraft = null;
+          beginMatch();
+        }
+        applyState(msg);
+        break;
+      }
       if (msg.eventForecast) state.eventForecast = { type: msg.eventForecast.type, squares: [] };
       render();
       break;
@@ -4169,10 +4240,20 @@ function mpHandleMessage(msg) {
       applyState(msg);
       break;
     case 'move':
-      applyRemoteMove(msg.from, msg.to, msg.promotion, msg.fen, msg.captured, null, msg.piece, null);
+      // O próprio jogador já aplicou o lance localmente; só o adversário precisa aplicá-lo
+      if (msg.color && msg.color === MP.side) break;
+      applyRemoteMove(msg.from, msg.to, msg.promotion, msg.fen, msg.captured, null, msg.piece, null, msg.fx);
       break;
     case 'gameOver':
       state.requestModal = null;
+      if (msg.reason === 'checkmate') {
+        if (!state.ended) {
+          clearModal();
+          state.mateResponseOffered = true;
+          finishCheckmate(msg.loser);
+        }
+        break;
+      }
       finishGame(msg.reason === 'draw' ? { type: 'draw' } : { type: 'resign', loser: msg.loser });
       break;
     case 'request':
@@ -4219,15 +4300,11 @@ function mpHandleMessage(msg) {
       if (msg.classes.w) state.classes.w = msg.classes.w;
       if (msg.classes.b) state.classes.b = msg.classes.b;
       MP.serverHands = msg.hands || { w: [], b: [] };
+      MP.serverRoulette = msg.roulette || null;
       beginMatch();
       break;
-    case 'eventTrigger':
-      applyRemoteEvent(msg);
-      render();
-      break;
-    case 'eventForecast':
-      state.eventForecast = { type: msg.eventType, squares: [] };
-      render();
+    case 'opponentRejoined':
+      toast('O adversário voltou para a sala.');
       break;
     case 'cardPlay':
       // Outro jogador jogou uma carta; verificar se temos contramagia disponível
@@ -4325,14 +4402,14 @@ function mpHandleMessage(msg) {
         break;
       }
       state.waitingForCounterspell = false;
+      state.lastCardOp = null;
       try {
-        if (state.pendingCard) {
-          state.pendingCard.serverConsumed = true;
-          cardTarget(msg.target, true);
-        }
+        if (state.pendingCard) cardTarget(msg.target, true);
       } catch (e) {
         console.error('[MP] Erro ao aplicar carta confirmada:', e);
       }
+      // Envia ao servidor o resultado: tabuleiro, efeitos e o consumo exato da carta/poder
+      mpSendSync();
       state.pendingCard = null;
       state.selected = null;
       state.legal = [];
@@ -4357,35 +4434,75 @@ function mpHandleMessage(msg) {
       break;
   }
 }
-function applyRemoteEvent(msg) {
-  // Clear old event visuals
-  state.holes = msg.holes || [];
-  state.portals = msg.portals || [];
-  state.mines = msg.mines || [];
-  state.eventHighlights = [];
-  state.eventType = msg.type;
-  playSound(msg.type);
-  // Apply swap pieces
-  if (msg.swaps) {
-    for (const s of msg.swaps) swapPieces(s.a, s.b);
-  }
-  // Show event banner with server-provided data
-  const title = eventInfo[msg.type][0];
-  let desc = eventInfo[msg.type][1];
-  if (msg.type === 'quake' && msg.holes) desc = `Abismos nas casas ${msg.holes.join(' e ')}. ${eventInfo[msg.type][1]}`;
-  if (msg.type === 'portal' && msg.portals) desc = `Portais ativos em ${msg.portals.join(' e ')}. Pouse em um para atravessar.`;
-  if (msg.type === 'mines') desc = `Quatro minas invisíveis foram espalhadas entre as fileiras 3 e 6. ${eventInfo[msg.type][1]}`;
-  $('#event-banner').textContent = `✳ ${title} — ${desc}`;
+/* Efeitos que vivem só no cliente de quem jogou (armadilhas, escudos, mortos, eventos...) são enviados ao
+   servidor junto do lance/efeito e reaplicados no outro lado: os dois sempre veem o mesmo estado. */
+function collectFx() {
+  const fx = {
+    shields: state.shields,
+    bombs: state.bombs,
+    stunned: state.stunned,
+    scheduledBishops: state.scheduledBishops,
+    holes: state.holes,
+    portals: state.portals,
+    mines: state.mines,
+    eventHighlights: state.eventHighlights,
+    dead: state.dead,
+    roulette: state.roulette,
+    eventType: state.eventType,
+    eventForecast: state.eventForecast,
+    roundDeltas: state.roundDeltas,
+    roundMaterialBaseline: state.roundMaterialBaseline,
+    activity: state.activity,
+    event: state.pendingEventNotice || null,
+  };
+  state.pendingEventNotice = null;
+  return JSON.parse(JSON.stringify(fx));
+}
+function applyFx(fx) {
+  if (!fx || typeof fx !== 'object') return;
+  for (const key of [
+    'shields',
+    'bombs',
+    'stunned',
+    'scheduledBishops',
+    'holes',
+    'portals',
+    'mines',
+    'eventHighlights',
+    'roundDeltas',
+    'activity',
+  ])
+    if (Array.isArray(fx[key])) state[key] = fx[key];
+  if (fx.dead) state.dead = fx.dead;
+  if ('roulette' in fx) state.roulette = fx.roulette;
+  if ('eventType' in fx) state.eventType = fx.eventType;
+  if ('eventForecast' in fx) state.eventForecast = fx.eventForecast;
+  if (typeof fx.roundMaterialBaseline === 'number')
+    state.roundMaterialBaseline = fx.roundMaterialBaseline;
+  if (Array.isArray(fx.activity)) renderActivity();
+}
+function showRemoteEventNotice(ev) {
+  if (!ev || !ev.type) return;
+  playSound(ev.type);
+  $('#event-banner').textContent = `✳ ${ev.title} — ${ev.msg}`;
   $('#event-banner').classList.remove('hidden');
-  toast(title + '! ' + desc);
-  recordActivity('event', title, desc, state.game.turn());
-  // Reset event progress counter and prepare next forecast
-  state.eventPly = 0;
-  prepareEventForecast();
+  toast(ev.title + '! ' + ev.msg);
 }
 function mpSendMove(from, to, promotion, fen, captured, san, piece, color) {
   if (!MP.ws || MP.ws.readyState !== 1) return;
-  MP.ws.send(JSON.stringify({ type: 'move', from, to, promotion, fen, captured: captured || null, san: san || null, piece: piece || null, color: color || null }));
+  MP.ws.send(JSON.stringify({ type: 'move', from, to, promotion, fen, captured: captured || null, san: san || null, piece: piece || null, color: color || null, fx: collectFx() }));
+}
+/* Resultado de uma carta/poder já aplicado: tabuleiro, efeitos e consumo exato (nível, carga, ganhos). */
+function mpSendSync() {
+  if (!MP.ws || MP.ws.readyState !== 1 || !state.game) return;
+  const op = state.lastCardOp;
+  state.lastCardOp = null;
+  MP.ws.send(JSON.stringify({ type: 'sync', fen: state.game.fen(), fx: collectFx(), op: op || null }));
+}
+function mpSendMateAccepted() {
+  if (!MP.ws || MP.ws.readyState !== 1) return false;
+  MP.ws.send(JSON.stringify({ type: 'mateAccepted' }));
+  return true;
 }
 function mpSendResign() {
   if (!MP.ws || MP.ws.readyState !== 1) return false;
@@ -4460,6 +4577,8 @@ function startMultiplayerGame(fen, opts) {
   state.promotionPending = null;
   state.motion = null;
   state.classDraft = null;
+  state.lastCardOp = null;
+  state.pendingEventNotice = null;
   $('#multiplayer-screen').classList.add('hidden');
   $('#setup-screen').classList.add('hidden');
   $('#game-screen').classList.remove('hidden');
@@ -4598,25 +4717,41 @@ function applyState(msg) {
   state.cardsUsed = msg.cardsUsed || { w: false, b: false };
   state.sacrificeUsed = msg.sacrificeUsed || { w: false, b: false };
   state.powerUsed = msg.powerUsed || { w: false, b: false };
-  if (msg.winner) {
+  applyFx(msg.fx);
+  // Em multiplayer o painel de cartas volta sempre para a mão do próprio jogador
+  if (MP.connected && MP.side) state.handSide = MP.side;
+  if (msg.winner && !state.ended) {
     state.ended = true;
     toast(msg.winner === 'w' ? 'Brancas venceram!' : 'Pretas venceram!');
   }
   render();
 }
 
-function applyRemoteMove(from, to, promotion, fen, captured, san, piece, color) {
-  // Apenas aplica o movimento no tabuleiro local para feedback imediato.
-  // Contadores/eventos/capturas/poderes vêm via 'state' broadcast.
+function applyRemoteMove(from, to, promotion, fen, captured, san, piece, color, fx) {
+  // Aplica o lance do adversário: tabuleiro + efeitos calculados por quem jogou (fx).
+  // Contadores, mãos e poderes vêm em seguida no 'state' do servidor.
   if (fen) {
-    try { state.game.load(fen); } catch {}
+    try {
+      state.game.load(fen);
+    } catch (e) {
+      console.error('[MP] FEN inválido recebido', fen, e);
+    }
   }
   state.lastMove = { from, to };
+  applyFx(fx);
+  if (fx && fx.event) showRemoteEventNotice(fx.event);
   // Som/animação de captura/movimento (p/ mover que o fez)
   if (captured) playSound('capture');
   else playSound('move');
   if (piece === 'p' && (to[1] === '1' || to[1] === '8')) playSound('promotion');
+  state.selected = null;
+  state.legal = [];
+  state.mateResponseOffered = false;
+  if (MP.side) state.handSide = MP.side;
+  if (captured === 'k') state.ended = true;
   render();
+  // Quem recebe o lance também precisa detectar xeque, xeque-mate e empate
+  checkEnd();
 }
 
 function setGameFromBoard(fen) {
