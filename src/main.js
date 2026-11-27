@@ -4308,7 +4308,7 @@ function mpHandleMessage(msg) {
       break;
     case 'cardPlay':
       // Outro jogador jogou uma carta; verificar se temos contramagia disponível
-      if (state.hands[MP.side] && state.hands[MP.side].includes('counterspell') && !state.cardsUsed[MP.side]) {
+      if (state.hands[MP.side] && state.hands[MP.side].includes('counterspell')) {
         const counterIndex = state.hands[MP.side].indexOf('counterspell');
         state.counterspellPending = { card: msg.card, target: msg.target, responder: MP.side, counterIndex };
         showModal(
@@ -4351,7 +4351,7 @@ function mpHandleMessage(msg) {
       break;
     case 'counterspellRequest':
       // Servidor está pedindo para usar contramagia
-      if (state.hands[MP.side] && state.hands[MP.side].includes('counterspell') && !state.cardsUsed[MP.side]) {
+      if (state.hands[MP.side] && state.hands[MP.side].includes('counterspell')) {
         const counterIndex = state.hands[MP.side].indexOf('counterspell');
         state.counterspellPending = { card: msg.card, target: msg.target, responder: MP.side, counterIndex };
         showModal(

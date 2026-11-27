@@ -684,8 +684,7 @@ wss.on('connection', (ws, req) => {
           otherWs &&
           otherWs.readyState === 1 &&
           room.hands[opponentSide] &&
-          room.hands[opponentSide].includes('counterspell') &&
-          !room.cardsUsed[opponentSide]
+          room.hands[opponentSide].includes('counterspell')
         ) {
           // Guardar detalhes da carta - o consumo só acontece se a contramagia for usada
           room.pendingCard = { card, target, playerSide, isClassPower, powerId, responderWs: otherWs };
